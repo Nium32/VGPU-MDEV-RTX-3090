@@ -134,4 +134,4 @@ like it, Monero:
 47BzeT42HzDArmPkUTrCQ2D1VidW4LiwA9L4E3k5ENrZVN7WPTx8yw2NHLcmQY7b9JBEgvvNSWUmqPmmGXdpLe6Y8QKniEs
 ```
 
-Receive-only. Entirely optional, and nothing here is gated behind it.
+Entirely optional. Nothing here is gated behind it.

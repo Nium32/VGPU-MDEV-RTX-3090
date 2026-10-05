@@ -641,11 +641,14 @@ by reading data back.**
 ### Host-side counters first
 
 ```bash
-MARK=$(cat /tmp/vgpu-mark.txt)
+MARK=$(cat /var/log/vgpu/winguest.mark)   # $LOG_DIR/$VM_NAME.mark
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -ci 'Immediate pteblit'
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -c  'error:'
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -cE 'XID [0-9]+ detected'
 ```
+
+The mark file is written by `startguest.sh` as `$LOG_DIR/$VM_NAME.mark`, so adjust the path if you
+changed `VM_NAME` or `LOG_DIR`. Earlier versions used a fixed name in `/tmp`.
 
 All three must be **0**. A non-zero pteblit count means your kernel is wrong — go back to Part 2.
 

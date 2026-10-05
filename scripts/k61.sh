@@ -13,6 +13,15 @@
 # Installs into the @vgpu580 subvolume only. The working "@" CachyOS install is not touched:
 # pacman writes to this subvolume's /usr and /boot, and GRUB loads /@vgpu580/boot/... .
 set +e
+
+# This replaces the running root's linux-lts. The header promises it only
+# touches the experiment subvolume, but nothing enforced that, so running it
+# from the working install destroyed that install's kernel.
+if ! findmnt -no OPTIONS / 2>/dev/null | grep -q 'subvol=/@vgpu580'; then
+    echo "REFUSING: / is not the @vgpu580 subvolume. This would overwrite the"
+    echo "          kernel of whichever install is currently booted."
+    exit 1
+fi
 exec > /home/vgpu/k61.log 2>&1
 V=/srv/vgpu/VMs
 BK=$V/kernel-backup
@@ -32,7 +41,7 @@ echo "  backup dir: $(sudo du -sh $BK 2>/dev/null | cut -f1)"
 say "B  install linux-lts 6.1.71 + headers from the Arch archive"
 cd /tmp
 A=https://archive.archlinux.org/packages/l
-sudo pacman -U --noconfirm --overwrite '*' \
+sudo pacman -U --noconfirm  \
   "$A/linux-lts/linux-lts-6.1.71-1-x86_64.pkg.tar.zst" \
   "$A/linux-lts-headers/linux-lts-headers-6.1.71-1-x86_64.pkg.tar.zst" 2>&1 | tail -12 | sed 's/^/  /'
 echo "  linux-lts now: $(pacman -Q linux-lts 2>/dev/null)"
@@ -49,9 +58,15 @@ T=$V/driver/vgpu-merged-build/merged-535.309.01/kernel
 OUT=$V/driver/modules-$KV
 cd "$T" || exit 1
 sudo rm -rf conftest conftest.h
-sudo find . -name '*.o' -delete 2>/dev/null; sudo find . -name '*.ko' -delete 2>/dev/null
+sudo find . -name '*.o' ! -name 'nv-kernel.o' ! -name 'nv-modeset-kernel.o' -delete 2>/dev/null; sudo find . -name '*.ko' -delete 2>/dev/null
 sudo rm -f Module.symvers modules.order
-sudo touch $B/include/config/auto.conf $B/include/generated/autoconf.h 2>/dev/null
+# Do NOT touch these into existence. Kbuild only tests that they exist, so an
+# empty pair passes the "Kernel configuration is invalid" check and the whole
+# driver then compiles with no CONFIG_* defined: wrong struct layouts, wrong
+# conftest answers, a module that loads and oopses. Reinstall the headers.
+for _f in "$B/include/config/auto.conf" "$B/include/generated/autoconf.h"; do
+    [ -s "$_f" ] || { echo "MISSING or EMPTY: $_f - reinstall the kernel headers"; exit 1; }
+done
 sudo make -j"$(nproc)" SYSSRC="$B" SYSOUT="$B" KERNEL_UNAME="$KV" \
      NV_EXCLUDE_KERNEL_MODULES="nvidia-drm nvidia-modeset nvidia-peermem" \
      modules > /home/vgpu/k61.raw 2>&1

@@ -28,7 +28,8 @@ say "gpu"
 BDF=$(detect_gpu_bdf) || exit 1
 info "pci address   : $BDF"
 info "pci id        : $(gpu_pci_id "$BDF")"
-info "iommu group   : $(gpu_iommu_group "$BDF")"
+info "iommu group   : $(gpu_iommu_group "$BDF" || echo 'none - IOMMU is off')"
+info "bound driver  : $(bound_driver "$BDF" || echo 'none')"
 if have lspci; then
     info "description   : $(lspci -s "$BDF" | cut -d' ' -f2-)"
     info "bar sizes     : $(lspci -v -s "$BDF" 2>/dev/null | awk '/Memory at/{printf "%s ", $NF}')"
@@ -92,7 +93,9 @@ fi
 say "display"
 # The vgpu-kvm RM core registers no KMS connectors, so this host cannot drive a
 # monitor from this GPU. Reported here so it is not mistaken for a fault.
-conn=$(ls -d /sys/class/drm/card*/card*-* 2>/dev/null | wc -l)
+# Scope to THIS gpu. Counting /sys/class/drm/card*/ would include a second
+# card that is driving the monitor, and the note below would never print.
+conn=$(ls -d /sys/bus/pci/devices/$BDF/drm/card*/card*-* 2>/dev/null | wc -l)
 info "drm connectors on this GPU: $conn"
 [ "$conn" -eq 0 ] && info "                expected: a vGPU host has no scanout. Use a second GPU for a monitor."
 

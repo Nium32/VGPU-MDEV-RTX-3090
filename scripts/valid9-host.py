@@ -17,7 +17,7 @@ def chk(name, rc):
 
 MINI = b"""//
 .version 7.5
-.target sm_86
+.target sm_ARCH
 .address_size 64
 .visible .entry nop_k(.param .u64 nop_k_p0)
 {
@@ -33,7 +33,7 @@ MINI = b"""//
 
 FULL = b"""//
 .version 7.5
-.target sm_86
+.target sm_ARCH
 .address_size 64
 .visible .entry fill(.param .u64 fill_p0, .param .u32 fill_p1)
 {
@@ -108,6 +108,15 @@ nm = ctypes.create_string_buffer(128); cu.cuDeviceGetName(nm, 128, dev)
 cc_maj = ctypes.c_int(); cc_min = ctypes.c_int()
 cu.cuDeviceComputeCapability(ctypes.byref(cc_maj), ctypes.byref(cc_min), dev)
 print("device: %s  cc=%d.%d" % (nm.value.decode(), cc_maj.value, cc_min.value), flush=True)
+
+# The PTX above is written with a literal sm_ARCH token and is retargeted here to
+# whatever this GPU actually reports. It used to be hard-coded to sm_86, which
+# fails to JIT on any other card. A plain %-format cannot be used: PTX register
+# names (%r, %rd, %p) would be read as format specifiers.
+_arch = ("sm_%d%d" % (cc_maj.value, cc_min.value)).encode()
+MINI = MINI.replace(b"sm_ARCH", _arch)
+FULL = FULL.replace(b"sm_ARCH", _arch)
+print("ptx target: %s" % _arch.decode(), flush=True)
 ctx = ctypes.c_void_p()
 chk("cuCtxCreate_v2", cu.cuCtxCreate_v2(ctypes.byref(ctx), 0, dev))
 
@@ -183,3 +192,4 @@ print("LOOP 10 iterations: fails=%d" % fails, flush=True)
 
 cu.cuMemFree_v2(d); cu.cuMemFree_v2(d2); cu.cuModuleUnload(mod); cu.cuCtxDestroy_v2(ctx)
 print("STRONG-VALIDATION-%s" % ("PASS" if (bad < 0 and bad2 < 0 and fails == 0) else "FAIL"), flush=True)
+

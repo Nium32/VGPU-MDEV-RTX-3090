@@ -121,7 +121,7 @@ Both as DWORDs under
 Three counters, scoped to the current run using the mark the start script writes:
 
 ```bash
-MARK=$(cat /tmp/vgpu-mark.txt)
+MARK=$(cat /var/log/vgpu/winguest.mark)   # $LOG_DIR/$VM_NAME.mark
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -ci 'Immediate pteblit'
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -c  'error:'
 journalctl -t nvidia-vgpu-mgr --since "$MARK" --no-pager | grep -cE 'XID [0-9]+ detected'

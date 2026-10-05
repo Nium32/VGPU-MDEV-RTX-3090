@@ -29,7 +29,17 @@ say "$(date '+%F %T') clean CUDA run on $(uname -r)"
 
 say "A  stop guest, wipe guest output files, stamp marker"
 sudo pkill -9 -f "qemu-system-x86_64" >/dev/null 2>&1; sleep 5
-for m in /mnt/win /mnt/nogpu /mnt/winro; do sudo umount -l $m >/dev/null 2>&1; done
+# No -l here. A lazy unmount detaches a busy mount immediately, which makes the
+# "stale nbd mount" guard a few lines below pass, and the nbd device is then
+# yanked out from under a live ntfs-3g. That can corrupt the qcow2.
+for m in /mnt/win /mnt/nogpu /mnt/winro; do
+  mountpoint -q "$m" || continue
+  sudo umount "$m" || {
+    echo "REFUSING: $m is busy"
+    fuser -vm "$m" 2>&1 | tail -3
+    exit 1
+  }
+done
 sudo systemctl stop vgpudrv vgpunbd vgpunbd2 vgpurd 2>/dev/null
 for i in 0 1 2 3; do sudo qemu-nbd --disconnect /dev/nbd$i >/dev/null 2>&1; done
 sleep 2

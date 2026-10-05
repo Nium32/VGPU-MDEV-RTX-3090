@@ -43,7 +43,11 @@ echo "$VGP" > "/sys/bus/mdev/devices/$U/nvidia/vgpu_params" \
 info "vgpu_params: $VGP"
 
 # Journal mark, so the health checks can scope their greps to this run only.
-date '+%Y-%m-%d %H:%M:%S' > /tmp/vgpu-mark.txt
+# Per-VM and under LOG_DIR, not a fixed name in /tmp that any user could
+# pre-create as a symlink.
+MARK_FILE="$LOG_DIR/$VM_NAME.mark"
+date '+%Y-%m-%d %H:%M:%S' > "$MARK_FILE"
+info "journal mark: $MARK_FILE"
 
 rm -f "$D/monitor.sock"
 
@@ -62,7 +66,9 @@ if [ "${RDP_HOST_PORT:-0}" -gt 0 ]; then
 fi
 
 say "booting $VM_NAME"
-setsid qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
+# Wrapped so the mdev is released whenever the guest exits, not only when it
+# fails to start. Without this every run leaks one, and the profile offers three.
+( setsid --wait qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
     -machine q35,accel=kvm,hpet=off \
     -smp "sockets=1,cores=$VM_CORES,threads=$VM_THREADS" -m "$VM_MEM_MB" \
     -rtc base=localtime,driftfix=slew -global kvm-pit.lost_tick_policy=discard \
@@ -77,16 +83,21 @@ setsid qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
     -drive "file=$D/$VM_DISK,if=none,id=disk0,format=qcow2,cache=writeback,discard=unmap" \
     -device ide-hd,drive=disk0,bus=ahci.0,bootindex=1 \
     "${NET_ARG[@]}" \
-    >> "$LOG_DIR/$VM_NAME-qemu.log" 2>&1 &
+    -pidfile "$D/qemu.pid"
+  _rc=$?
+  timeout 30 sh -c "echo 1 > /sys/bus/mdev/devices/$U/remove" 2>/dev/null
+  exit $_rc
+) >> "$LOG_DIR/$VM_NAME-qemu.log" 2>&1 &
+QPID=$!
 
 sleep 15
-running=$(pgrep -cf "qemu-system-x86_64.*$VM_NAME")
-info "mdev=$U  qemu processes=$running"
-if [ "$running" -eq 0 ]; then
+# kill -0 on the wrapper, not a pgrep pattern: a pattern match would also count
+# an unrelated guest whose name merely contains this one.
+if ! kill -0 "$QPID" 2>/dev/null; then
     warn "qemu exited. Last lines of $LOG_DIR/$VM_NAME-qemu.log:"
     tail -5 "$LOG_DIR/$VM_NAME-qemu.log" | cut -c1-200 | sed 's|^|     |'
-    warn "removing the orphaned mdev"
-    echo 1 > "/sys/bus/mdev/devices/$U/remove" 2>/dev/null
+    warn "the wrapper has already released mdev $U"
     exit 1
 fi
+info "mdev=$U  qemu pid=$(cat "$D/qemu.pid" 2>/dev/null)"
 say "up. monitor: socat - UNIX-CONNECT:$D/monitor.sock"

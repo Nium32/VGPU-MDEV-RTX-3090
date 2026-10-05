@@ -29,7 +29,13 @@ say "A  kernel build tree intact? (an out-of-tree build deleted these once)"
 for f in include/generated/autoconf.h include/generated/rustc_cfg include/config/auto.conf; do
   printf "  %-34s %s\n" "$f" "$(test -e $B/$f && echo present || echo MISSING)"
 done
-sudo touch $B/include/config/auto.conf $B/include/generated/autoconf.h $B/include/generated/rustc_cfg 2>/dev/null
+# Do NOT touch these into existence. Kbuild only tests that they exist, so an
+# empty pair passes the "Kernel configuration is invalid" check and the whole
+# driver then compiles with no CONFIG_* defined: wrong struct layouts, wrong
+# conftest answers, a module that loads and oopses. Reinstall the headers.
+for _f in "$B/include/config/auto.conf" "$B/include/generated/autoconf.h"; do
+    [ -s "$_f" ] || { echo "MISSING or EMPTY: $_f - reinstall the kernel headers"; exit 1; }
+done
 
 say "B  protected parent images (must never change)"
 for f in /var/lib/vgpu-vm/win-vgpu-wsys53972/win-vgpu-wsys53972.qcow2 \

@@ -13,7 +13,10 @@ echo "mdev types: $(ls /sys/class/mdev_bus/0000:0a:00.0/mdev_supported_types/ 2>
 if ! grep -q GRIND-COMPLETE /home/user/grind-results.txt 2>/dev/null; then
     if [ "$(ps -eo args | grep -c '[g]rind.sh')" -eq 0 ]; then
         echo "resuming sweep at $(grep -c '^KEY=' /home/user/grind-results.txt 2>/dev/null) results"
-        setsid nohup sudo -u user /home/user/grind.sh < /dev/null >> /home/user/grind.log 2>&1 &
+# Disabled: this relaunched the retired registry sweep on every boot, and that
+# sweep rewrites guest registry keys and reboots the guest unattended.
+# Set RESUME_GRIND=1 in the environment if you really want it back.
+[ "${RESUME_GRIND:-0}" = "1" ] &&         setsid nohup sudo -u user /home/user/grind.sh < /dev/null >> /home/user/grind.log 2>&1 &
     fi
 fi
 

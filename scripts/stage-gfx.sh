@@ -8,7 +8,7 @@ SRC=/srv/vgpu/VMs/driver/vgpu-merged-build/merged-535.309.01
 P=/opt/nv535-gfx
 echo "=== $(date +%T) staging into $P ==="
 sudo rm -rf $P
-sudo mkdir -p $P/lib $P/egl_vendor.d $P/vulkan/icd.d
+sudo mkdir -p "$P/lib" "$P/egl_vendor.d" "$P/vulkan/icd.d"
 n=0
 for f in $(sudo ls -1 $SRC | grep -E '^lib.*\.so\.535\.309\.01$'); do
   sudo cp -n "$SRC/$f" "$P/lib/$f" 2>/dev/null && n=$((n+1))

@@ -12,9 +12,15 @@ sudo systemctl stop vgpu535-515-mgr.service vgpu535-515-vgpud.service 2>/dev/nul
 sleep 2
 echo "=== unloading driver ==="
 sudo rmmod nvidia_vgpu_vfio 2>/dev/null
-sudo rmmod nvidia 2>/dev/null
+sudo rmmod zfmulti mdguest nvidia_uvm nvidia_vgpu_vfio nvidia 2>/dev/null
 lsmod | grep -E "^nvidia" || echo "driver unloaded"
 echo "=== PCI FLR ==="
+# Refuse the reset unless the device really has no driver bound. Resetting a
+# live driver is how this script used to corrupt a running stack.
+if [ -e "/sys/bus/pci/devices/$P/driver" ]; then
+    echo "REFUSING FLR: $P is still bound to $(basename "$(readlink -f /sys/bus/pci/devices/$P/driver)")"
+    exit 1
+fi
 sudo sh -c 'echo 1 > /sys/bus/pci/devices/0000:0a:00.0/reset' && echo FLR-OK || echo FLR-FAILED
 sleep 3
 echo "=== reloading stack ==="
@@ -30,3 +36,12 @@ LD_LIBRARY_PATH=/opt/nvidia-vgpu-535/merged/535.309.01/lib/x86_64-linux-gnu \
 for f in /sys/class/mdev_bus/0000:0a:00.0/mdev_supported_types/*/available_instances; do
   v=$(cat "$f" 2>/dev/null); [ "$v" != "0" ] && echo "$(basename $(dirname $f)) avail=$v"
 done
+
+# A kprobe does not pin its target module. When nvidia.ko is unloaded the
+# module-going notifier kills the probe, and after a reload it shows as [GONE]
+# in /sys/kernel/debug/kprobes/list while zfmulti is still listed by lsmod.
+# Anything that checks "is zfmulti loaded" is therefore not enough: re-run the
+# bring-up so the probe is registered against the new module.
+echo
+echo "NOTE: zfmulti's kprobe is dead after an nvidia.ko reload even if lsmod"
+echo "      still lists the module. Run bringup.sh before starting a guest."
