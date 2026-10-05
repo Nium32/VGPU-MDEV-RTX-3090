@@ -12,6 +12,8 @@ that tell you in two minutes whether this can work for you at all.
 exactly one GPU — a GA102 RTX 3090 — and on exactly two kernels. It is not a general recipe and
 it will not work unmodified on your card.
 
+**If you cannot find something internet archive is a very good place to search for drivers**
+
 ## Status
 
 What has been verified by reading data back, not by the absence of errors:
