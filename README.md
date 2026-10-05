@@ -155,6 +155,35 @@ there may be another like it and read the script before you run it as root.
 
 If you want the proven-exact path, use `scripts/as-run/` and edit the paths by hand.
 
+## If you got here searching for an error
+
+These are the exact failures this repository explains, with the symptom first. If you are staring
+at one of them right now, the linked section is where the answer is.
+
+| what you are seeing | what it means |
+|---|---|
+| `Immediate pteblit ... timed out`, hundreds of them, from `nvidia-vgpu-mgr` | your kernel. 6.8 and 6.18 fail this way, 6.1.71 does not. [KERNEL-REQUIREMENTS.md](docs/KERNEL-REQUIREMENTS.md) |
+| guest shows **Code 43** in Device Manager with a vGPU attached | the two guest registry keys are missing, or are in the wrong class subkey. [Tutorial Part 9](docs/TUTORIAL.md) |
+| `Xid 44 ... Ch 00000008, intr 00000000` every run | `RMSetClientRMAllocatedCtxBuffer` is unset, so the guest promotes its own context buffers. [Tutorial Part 9](docs/TUTORIAL.md) |
+| guest boots, GPU present, no errors anywhere, and nothing renders | the RM interrupt handler leaked a runlist disable. This is the core finding. [Tutorial Part 5](docs/TUTORIAL.md) |
+| `init_device_instance` fails with **error 7** | no PCI function-level reset after a by-hand driver reload |
+| `insmod: Unknown symbol in module` on `nvidia-vgpu-vfio.ko` | `mdev`, `vfio`, `vfio_pci_core` or `irqbypass` is not loaded |
+| `error getting device from group N ... not already in use` | a `SIGKILL`ed QEMU wedged the IOMMU group; the vfio core modules must come out |
+| `cuCtxCreate` returns **801** NOT_SUPPORTED | you are on an `A` profile. Use a `Q` profile. |
+| `Xid 119 GSP_INIT_DONE` timeout, mdev types vanish | GSP cannot boot on this card. `NVreg_EnableGpuFirmware=0` |
+| `nvidia-smi` says `Virtualization Mode : None` while a guest is running | expected here, and not a useful signal. Check `/sys/bus/mdev/devices/` |
+| `krcWatchdogInit_IMPL` returns `NV_ERR_INVALID_STATE` | `RmRcWatchdog=0` is missing in the guest |
+| no KMS connectors, `/dev/dri` absent, no monitor output | structural. The vgpu-kvm RM core has no display engine. [HARDWARE-SCOPE.md](docs/HARDWARE-SCOPE.md) |
+
+For the symbol `_nv042311rm` and the offset `+0x28`: that is the interrupt handler branch this
+project suppresses, and [FINDING-THE-ISR-OFFSET.md](docs/FINDING-THE-ISR-OFFSET.md) explains how to
+locate the equivalent on a driver build other than 535.309.01.
+
+This is a **GeForce RTX 3090** running NVIDIA **vGPU** through the **legacy mdev** path - the same
+territory as `vgpu_unlock`, but the problem solved here is scheduling, not device-ID gating. It is
+not Proxmox-specific, though Proxmox is the obvious host for it and the kernel caveat above applies
+there too.
+
 ## No support
 
 I am not answering questions about this. Not in issues, not by email, not in DMs.
