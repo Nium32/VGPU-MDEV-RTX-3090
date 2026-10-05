@@ -1,0 +1,50 @@
+# Disk images and anything VM-sized. These are never going in git.
+*.qcow2
+*.img
+*.iso
+*.raw
+*.vmdk
+*.vhd
+OVMF_VARS*.fd
+
+# NVIDIA installer blobs. Portal-gated, hundreds of MB, not redistributable.
+*.run
+NVIDIA-Linux-*
+
+# Build output. Rebuild it, do not ship it.
+*.ko
+*.o
+*.mod
+*.mod.c
+*.mod.o
+*.symvers
+*.order
+.tmp_versions/
+modules-*/
+conftest/
+
+# Archives.
+*.tar
+*.tgz
+*.tar.zst
+*.tar.gz
+*.zip
+
+# Key material and anything that smells like it. Hard stop.
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+*.crt
+id_*
+*_rsa
+*_ed25519
+testsign-*/
+
+# Captured traces and journals. Large, machine-specific, no value to a reader.
+*.ppm
+*.evtx
+*-journal.txt
+plasma.log
+*.log

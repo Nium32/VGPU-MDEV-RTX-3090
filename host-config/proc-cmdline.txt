@@ -1,0 +1,1 @@
+BOOT_IMAGE=/@vgpu580/boot/vmlinuz-linux-lts root=UUID=<ROOT-FS-UUID> rw rootflags=subvol=@vgpu580 nowatchdog nvme_load=YES loglevel=3 nvidia.NVreg_EnableGpuFirmware=0

@@ -1,0 +1,4 @@
+obj-m := fifopeek.o
+KDIR ?= /usr/lib/modules/$(shell uname -r)/build
+all:
+	$(MAKE) -C $(KDIR) M=$(CURDIR) modules
