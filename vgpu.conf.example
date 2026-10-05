@@ -1,0 +1,93 @@
+# Copy to vgpu.conf and edit. Every value here has a sane default or is auto-detected,
+# so start by setting nothing and run ./scripts/preflight.sh to see what was found.
+#
+# Anything you set here wins over auto-detection.
+
+# ---------------------------------------------------------------------------
+# Where things live
+# ---------------------------------------------------------------------------
+
+# Data filesystem holding driver trees, module sources and VM images.
+# Expected layout underneath:
+#   $VGPU_ROOT/driver/modules-<uname -r>/   nvidia.ko and friends, per kernel
+#   $VGPU_ROOT/kmod/zfmulti/                required kprobe module
+#   $VGPU_ROOT/kmod/mdguest/                required helper module
+#VGPU_ROOT=/srv/vgpu/VMs
+
+# Where the VM directories live. Each guest gets its own subdirectory holding
+# its qcow2 and its OVMF_VARS.fd.
+#VM_BASE=/var/lib/vgpu-vm
+
+# Log destination. Scripts append rather than truncate.
+#LOG_DIR=/var/log/vgpu
+
+# ---------------------------------------------------------------------------
+# GPU
+# ---------------------------------------------------------------------------
+
+# PCI address of the GPU, domain included. Leave unset to auto-detect the first
+# NVIDIA display controller. Set it explicitly if the machine has more than one.
+#   lspci -D -d 10de::0300
+#GPU_BDF=0000:0a:00.0
+
+# The vGPU profile to hand the guest. Prefer the NAME, not the nvidia-NNN type
+# id: the numeric id differs between driver versions and between boards, the
+# name does not. preflight.sh lists what your card offers.
+#VGPU_PROFILE_NAME=RTXA5000-8Q
+
+# Only used if VGPU_PROFILE_NAME finds nothing. Hard-codes the type directory.
+#VGPU_TYPE=nvidia-664
+
+# Parameters written to the mdev's nvidia/vgpu_params before the guest starts.
+#VGPU_PARAMS=loglevel=5,disable_vnc=1
+
+# Module parameters for nvidia.ko. RMSetSriovMode=0 selects the legacy mdev
+# path, which is the only one consumer Ampere can use.
+#NVIDIA_REGISTRY_DWORDS=RMSetSriovMode=0
+#NVIDIA_ENABLE_GPU_FIRMWARE=0
+
+# ---------------------------------------------------------------------------
+# The one required intervention
+# ---------------------------------------------------------------------------
+
+# zfmulti forces a zero flag at an offset inside the RM interrupt handler that
+# otherwise leaks a GR runlist disable with no matching re-enable. Without it
+# the guest's graphics channel is scheduled once and then never again.
+#
+# This spec is tied to the exact driver BUILD. The symbol name is anonymised by
+# NVIDIA and both the name and the offset move between driver versions. On
+# 535.309.01 it is _nv042311rm+0x28. On any other build you must locate it
+# yourself; see docs/FINDING-THE-ISR-OFFSET.md.
+#ZFMULTI_SPEC=_nv042311rm+0x28:1
+
+# ---------------------------------------------------------------------------
+# Guest
+# ---------------------------------------------------------------------------
+
+#VM_NAME=winguest
+#VM_DISK=win.qcow2
+#VM_MEM_MB=12288
+#VM_CORES=4
+#VM_THREADS=2
+
+# OVMF firmware. Auto-detected across the common distro paths; set it if your
+# distribution puts it somewhere unusual. Must be the 4MB variant to match the
+# 4MB OVMF_VARS.fd these VMs use.
+#OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+
+# Host port forwarded to the guest's RDP port 3389. 0 disables the forward.
+#RDP_HOST_PORT=3390
+
+# QEMU's own VNC display number, so you can see the guest before it has RDP up.
+# Display N listens on port 5900+N. Set to -1 to disable.
+#QEMU_VNC_DISPLAY=2
+
+# ---------------------------------------------------------------------------
+# Kernel allow-list
+# ---------------------------------------------------------------------------
+
+# Kernels this has actually been made to work on. preflight.sh warns loudly when
+# the running kernel is not in this list, because the failure mode on an
+# untested kernel is a slow one: the stack loads, the guest boots, and the
+# framebuffer blit times out thousands of times.
+#KERNEL_KNOWN_GOOD="5.15.95 6.1.71"
