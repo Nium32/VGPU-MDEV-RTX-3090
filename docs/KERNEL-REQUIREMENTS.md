@@ -144,6 +144,25 @@ goes to zero, `SCHED_DISABLE` stays 0, and the guest's graphics channel runs all
 
 A control test with no kprobe at all: everything hangs. This is the single necessary intervention.
 
+### This is not a claim that NVIDIA's driver is buggy
+
+Worth stating plainly, because it would be easy to read it that way and the evidence does not
+support it.
+
+The branch at `+0x28` tests a flag (`pGpu+0x44ec & 0x10`) and parks the runlist when it is not set.
+That is the handler doing exactly what it was written to do. On hardware NVIDIA actually supports
+for vGPU, that condition presumably resolves the other way and the disable is either never taken or
+properly paired — this card is not such hardware, and nothing here establishes otherwise.
+
+So what was measured is an **unpaired disable in a configuration the vendor does not support**, not
+a defect. The kprobe does not repair anything. It forces one branch so an unsupported card takes
+the path a supported one would, which is a different and much smaller claim.
+
+The honest limit of the finding: `_nv042311rm+0x77` issued 572 disables and zero re-enables over
+roughly 70 seconds with a hung guest, while `_nv023182rm` was balanced 15/15, and forcing the gate
+makes the guest work. Everything beyond that — why the flag is clear, what it means on a supported
+card, whether NVIDIA intended this path for unsupported devices — is not known from here.
+
 **The symbol and the offset are specific to one driver build.** NVIDIA anonymises these names, and
 both the name and the offset move between versions. Within 535.309.01 alone the same symbol sat at
 two different addresses across two kernel builds. There is no evidence either way about whether

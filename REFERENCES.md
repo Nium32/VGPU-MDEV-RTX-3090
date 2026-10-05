@@ -114,8 +114,9 @@ That project also documented something this one saw from a different angle: NVID
 device-ID allowlist plus a compile flag - and, on Blackwell, fuses.
 
 Ampere sits between those two worlds, which is why the work here was possible at all: GA102 has no
-SR-IOV to fuse off, the RM core still runs on the CPU, and the blocker turned out to be a
-scheduling bug reachable with a kprobe.
+SR-IOV to fuse off, the RM core still runs on the CPU, and the thing standing in the way was a
+branch in that CPU code rather than a fuse in silicon. A kprobe can reach a branch. Nothing reaches
+a fuse.
 
 The conclusion of that survey: **no published implementation of this exists.** The runlist-disable
 leak described in the tutorial does not appear in any public write-up found, which is why this

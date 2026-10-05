@@ -416,6 +416,13 @@ The fix is to force one branch in that handler so the disable never happens. Tha
 does: it registers a kprobe at an offset and sets the zero flag so one conditional goes the other
 way.
 
+To be precise about what that is and is not: the branch tests a flag and parks the runlist when it
+is not set, which is the handler working as written. This card is not hardware NVIDIA supports for
+vGPU, and on hardware it does support that condition presumably resolves the other way. So this is
+an unpaired disable in an unsupported configuration, not a defect in their code, and the kprobe
+forces one branch rather than repairing anything. See the note in
+[KERNEL-REQUIREMENTS.md](KERNEL-REQUIREMENTS.md).
+
 With it: leak 0, `SCHED_DISABLE` stays 0, and the guest's channel runs all 80 of its queued work
 items natively with no poking. A control test with no kprobe at all: everything hangs.
 

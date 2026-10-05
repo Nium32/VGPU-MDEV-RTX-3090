@@ -164,7 +164,7 @@ at one of them right now, the linked section is where the answer is.
 | `Immediate pteblit ... timed out`, hundreds of them, from `nvidia-vgpu-mgr` | your kernel. 6.8 and 6.18 fail this way, 6.1.71 does not. [KERNEL-REQUIREMENTS.md](docs/KERNEL-REQUIREMENTS.md) |
 | guest shows **Code 43** in Device Manager with a vGPU attached | the two guest registry keys are missing, or are in the wrong class subkey. [Tutorial Part 9](docs/TUTORIAL.md) |
 | `Xid 44 ... Ch 00000008, intr 00000000` every run | `RMSetClientRMAllocatedCtxBuffer` is unset, so the guest promotes its own context buffers. [Tutorial Part 9](docs/TUTORIAL.md) |
-| guest boots, GPU present, no errors anywhere, and nothing renders | the RM interrupt handler leaked a runlist disable. This is the core finding. [Tutorial Part 5](docs/TUTORIAL.md) |
+| guest boots, GPU present, no errors anywhere, and nothing renders | an interrupt handler disabled the graphics runlist and nothing re-enabled it. This is the core finding. [Tutorial Part 5](docs/TUTORIAL.md) |
 | `init_device_instance` fails with **error 7** | no PCI function-level reset after a by-hand driver reload |
 | `insmod: Unknown symbol in module` on `nvidia-vgpu-vfio.ko` | `mdev`, `vfio`, `vfio_pci_core` or `irqbypass` is not loaded |
 | `error getting device from group N ... not already in use` | a `SIGKILL`ed QEMU wedged the IOMMU group; the vfio core modules must come out |
