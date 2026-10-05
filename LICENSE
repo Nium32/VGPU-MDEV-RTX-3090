@@ -1,0 +1,78 @@
+Copyright (c) 2026 Nium
+
+USE THIS FREELY. CREDIT "Nium".
+
+Take any part of this — the scripts, the kernel modules, the documentation, the
+findings, the measurements, the dead ends. Use it in your own project, your own
+article, your own product, commercially or not. Modify it. Redistribute it. No
+permission needed and nothing to ask for.
+
+The one condition: give credit to **Nium**, with a link back to this repository
+where that is reasonable.
+
+That is the whole intent. The formal licenses below exist to make it
+enforceable and to keep the kernel modules legally coherent; every one of them
+requires attribution, so honouring the line above honours all of them.
+
+================================================================================
+WHICH LICENSE APPLIES TO WHAT
+================================================================================
+
+  kmod/                    GPL-2.0-only
+                           Not a choice. These are Linux kernel modules, they
+                           call GPL-only exported symbols such as
+                           register_kprobe, and every one of them declares
+                           MODULE_LICENSE("GPL"). They cannot be shipped under
+                           a weaker licence.
+
+  scripts/  lib/           MIT  (full text below)
+  vgpu.conf.example
+
+  docs/  notes/            CC-BY-4.0
+  README.md                https://creativecommons.org/licenses/by/4.0/
+  REFERENCES.md            Attribution required for any public use, not only
+                           for redistributing the files.
+
+  host-config/             MIT, as above.
+
+Not covered by any of this, because it is not mine to license: the NVIDIA vGPU
+host driver, the GRID guest driver, their installers, vgpuConfig.xml, and any
+NVIDIA licence file. None of those are in this repository. See REFERENCES.md
+for the third-party projects this builds on, which carry their own licences.
+
+================================================================================
+MIT License  —  applies to scripts/, lib/, host-config/, vgpu.conf.example
+================================================================================
+
+Copyright (c) 2026 Nium
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+================================================================================
+A WORD ON THE WARRANTY DISCLAIMER
+================================================================================
+
+Read that last paragraph as meant. This software loads kernel modules, resets
+PCI devices, places kprobes at hard-coded offsets inside a proprietary driver,
+and writes to sysfs. During development it wedged a GPU, oopsed the host more
+than once, and needed a physical power cycle. It is an unsupported
+configuration on hardware the vendor does not intend it for.
+
+If it breaks your machine, that is your risk. Read docs/TUTORIAL.md Part 11
+before you run anything.

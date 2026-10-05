@@ -108,6 +108,23 @@ Full list, including the tooling and what was consulted and rejected:
 
 No NVIDIA code, driver installer or license is redistributed in this repository.
 
+## Use it
+
+Free to use, all of it. Scripts, kernel modules, documentation, the measurements, the dead ends.
+Your project, your article, your product, commercial or not. Modify it, redistribute it, no
+permission needed.
+
+**Credit "Nium"**, with a link back here where that is reasonable. That is the only condition.
+
+Formally: `kmod/` is GPL-2.0-only because Linux kernel modules calling GPL-only exports cannot be
+anything else; `scripts/`, `lib/` and `host-config/` are MIT; the documentation is CC-BY-4.0. All
+three require attribution, so crediting Nium satisfies all of them. Full text and the reasoning:
+[LICENSE](LICENSE).
+
+No warranty, and read that part seriously - this loads kernel modules, resets PCI devices and
+places kprobes at hard-coded offsets in a proprietary driver. It wedged a GPU and oopsed the host
+more than once during development. See [Part 11 of the tutorial](docs/TUTORIAL.md) first.
+
 ## Donations
 
 This took a long time and the result is given away. If it saved you some of that time and you feel
