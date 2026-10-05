@@ -64,6 +64,9 @@ numeric ids are assigned per driver version and per board and will not match you
 sudo ./scripts/preflight.sh
 ```
 
+It runs without root too, but some sysfs reads it needs are root-only, so the picture will be
+incomplete. Unlike the other scripts it does not require root and does not call `need_root`.
+
 It changes nothing. It reports the GPU it found and its real PCI id, the IOMMU group, the module
 set for your kernel with each module's version and vermagic, whether the required helpers exist and
 match, where your OVMF image is, every vGPU profile the card offers with framebuffer sizes and

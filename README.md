@@ -81,6 +81,7 @@ kmod/*                 read-only diagnostic probes used during the investigation
 notes/                 what was tried and what failed
 COMPATIBILITY.md       what works, what fails, what nobody has tried - please add rows
 CONTRIBUTING.md        what is most wanted, and the traps this codebase hit
+SECURITY.md            network defaults, what is excluded, operational hazards
 Makefile               make modules / make check / make install
 ```
 
@@ -115,6 +116,38 @@ Full list, including the tooling and what was consulted and rejected:
 [REFERENCES.md](REFERENCES.md).
 
 No NVIDIA code, driver installer or license is redistributed in this repository.
+
+## What has and has not been tested
+
+Be clear about this before trusting the code, because the documentation is better verified than the
+scripts are.
+
+**Verified by running it on the hardware:**
+
+- `scripts/preflight.sh` - run against the live host. It correctly discovers the GPU, its real PCI
+  id, the IOMMU group, the module set and vermagic, the OVMF path, all 18 profiles and the zero DRM
+  connectors, and reports OK.
+- The backing-file guard in `lib/common.sh` - run against the real 4-deep qcow2 chain. It permits
+  the leaf and refuses all three parents, each naming the overlay that blocks it.
+- `kmod/zfmulti`, `kmod/mdguest`, `kmod/isrfind` - all build warning-free against kernel 6.1.71.
+- `make modules` and `make check` - run end to end on the host.
+- Everything in `scripts/as-run/` - that is the exact text that produced every measurement quoted
+  in the documentation.
+
+**Generalised from working scripts but NOT re-tested as a full cycle:**
+
+`scripts/bringup.sh`, `scripts/startguest.sh` and `scripts/hardreset.sh`. They are rewrites of the
+as-run versions with the machine-specific values replaced by runtime discovery. The logic and the
+ordering match, the discovery layer is tested, and they pass `shellcheck -S warning` - but a full
+tear-down-and-bring-up cycle has not been run with them, because doing that means taking down a
+working guest.
+
+That matters. Until recently `bringup.sh` carried a two-character escape where a line continuation
+was meant, so `systemctl is-active` received an extra argument and the script died on every single
+run. `bash -n` accepted it happily; `shellcheck` caught it. CI now rejects that pattern, but assume
+there may be another like it and read the script before you run it as root.
+
+If you want the proven-exact path, use `scripts/as-run/` and edit the paths by hand.
 
 ## Use it
 

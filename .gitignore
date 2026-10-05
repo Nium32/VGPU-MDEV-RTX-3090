@@ -48,3 +48,21 @@ testsign-*/
 *-journal.txt
 plasma.log
 *.log
+
+# A user's own configuration. This holds their PCI address, mount paths, VM
+# names and ports. It must never be committed - that is exactly the kind of
+# machine-specific detail this repository was scrubbed of.
+/vgpu.conf
+vgpu.conf.local
+
+# Run-time artefacts the scripts create.
+*.mark
+qemu.pid
+monitor.sock
+
+# Kbuild leftovers in the module directories.
+.*.cmd
+*.mod
+Module.symvers
+modules.order
+.tmp_versions/

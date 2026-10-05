@@ -508,6 +508,9 @@ Then:
 sudo ./scripts/preflight.sh
 ```
 
+It works without root as well, but several of the sysfs files it reads are root-only, so you get a
+partial report. It is the one script here that does not require root - it changes nothing.
+
 This changes nothing. It reports the GPU it found and its real PCI id, the IOMMU group, the module
 set for your kernel with versions and vermagic, whether the helpers exist and match, your OVMF
 path, every profile the card offers with framebuffer sizes, and the DRM connector count (expect
