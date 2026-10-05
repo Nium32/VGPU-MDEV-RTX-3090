@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the documentation first
+    url: https://github.com/Nium32/VGPU-MDEV-RTX-3090#no-support
+    about: "Questions are not answered. The tutorial, hardware scope, compatibility table and the list of ~80 measured dead ends cover everything I know."
+  - name: Setup help
+    url: https://github.com/Nium32/VGPU-MDEV-RTX-3090/blob/main/docs/TUTORIAL.md
+    about: "The full walkthrough, thirteen parts, bare machine to a working guest. Start with the five qualification questions."
+  - name: Porting to another driver build
+    url: https://github.com/Nium32/VGPU-MDEV-RTX-3090/blob/main/docs/FINDING-THE-ISR-OFFSET.md
+    about: "If you are not on 535.309.01 you need your own ISR offset. kmod/isrfind automates the tedious part."

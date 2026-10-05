@@ -1,0 +1,67 @@
+name: Compatibility result
+description: A combination you tested, working or not. Failures are just as useful.
+title: "[compat] "
+labels: [compatibility]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This is the most useful thing you can contribute. A confirmed failure saves the next
+        person as much time as a success.
+
+        `scripts/preflight.sh` output covers most of the fields below.
+  - type: input
+    attributes:
+      label: Kernel
+      description: Output of `uname -r`
+      placeholder: "6.6.52-1-lts"
+    validations: { required: true }
+  - type: input
+    attributes:
+      label: GPU and real PCI ID
+      placeholder: "RTX 3080 Ti, 10de:2208, spoofed to 10de:2231"
+    validations: { required: true }
+  - type: input
+    attributes:
+      label: Host driver version
+      placeholder: "535.309.01 merged vgpu-kvm"
+    validations: { required: true }
+  - type: input
+    attributes:
+      label: Guest driver and profile name
+      placeholder: "539.72 GRID DCH, RTXA5000-8Q"
+    validations: { required: true }
+  - type: dropdown
+    attributes:
+      label: Result
+      options:
+        - Works - compute verified by reading data back
+        - Partly works - see details
+        - Does not work
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      label: The three counters
+      description: Scoped to your run with the mark file.
+      placeholder: |
+        MARK=$(cat /var/log/vgpu/<vm>.mark)
+        Immediate pteblit: 0
+        error:             0
+        XID detected:      0
+      render: shell
+    validations: { required: true }
+  - type: textarea
+    attributes:
+      label: How you verified compute
+      description: |
+        "No errors" is not verification. On this hardware a test once returned rc=0 while memset32
+        silently did nothing and a readback showed the original pattern. Say what you read back.
+    validations: { required: true }
+  - type: input
+    attributes:
+      label: ISR offset, if you had to find your own
+      placeholder: "_nv042311rm+0x28, leak went 572 -> 0"
+  - type: textarea
+    attributes:
+      label: Anything else
+      description: Mark clearly which numbers you measured yourself and which you took from elsewhere.

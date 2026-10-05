@@ -1,5 +1,9 @@
 # Contributing
 
+**I do not answer questions.** Issues asking "how do I", "will it work on", or "where do I get the
+driver" will be closed unanswered - see the No support section of the README. Data and patches are
+welcome; requests for help are not. Nothing personal, it is capacity.
+
 The most valuable thing you can contribute is **a row in
 [COMPATIBILITY.md](COMPATIBILITY.md)**, including a failure. A confirmed "this combination does not
 work" saves the next person as much time as a success does, and right now most of that table reads

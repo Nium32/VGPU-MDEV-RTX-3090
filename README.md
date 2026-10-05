@@ -153,6 +153,34 @@ there may be another like it and read the script before you run it as root.
 
 If you want the proven-exact path, use `scripts/as-run/` and edit the paths by hand.
 
+## No support
+
+I am not answering questions about this. Not in issues, not by email, not in DMs.
+
+That is not hostility, it is capacity. Everything I know is already written down here, in more detail
+than I could reproduce in a reply:
+
+- **"How do I set it up?"** - [docs/TUTORIAL.md](docs/TUTORIAL.md), thirteen parts, start to finish.
+- **"Will it work on my card / kernel / driver?"** - [docs/HARDWARE-SCOPE.md](docs/HARDWARE-SCOPE.md)
+  and [COMPATIBILITY.md](COMPATIBILITY.md). If your combination is not listed, the honest answer is
+  that nobody knows.
+- **"Where do I get the driver?"** - NVIDIA's licensing portal. I cannot give you a copy and will
+  not respond to requests for one.
+- **"It does not work / I get error X."** - [the troubleshooting table](docs/TUTORIAL.md) covers the
+  failures that were actually hit here. Beyond that, read
+  [notes/WHAT-DIDNT-WORK.md](notes/WHAT-DIDNT-WORK.md) before asking anyone anything, because
+  roughly 80 approaches were already measured and most of them failed.
+- **"Can you add support for ...?"** - no. Use the method, see
+  [docs/FINDING-THE-ISR-OFFSET.md](docs/FINDING-THE-ISR-OFFSET.md).
+- **"Is this legal / allowed?"** - ask a lawyer, not me.
+
+Issues are open for exactly two things: **a row for [COMPATIBILITY.md](COMPATIBILITY.md)** (including
+a failure - those are just as useful) and **a concrete bug with a reproduction**. Pull requests are
+welcome and will be read. Questions will be closed unanswered.
+
+If the documentation is wrong or unclear, that is worth a pull request fixing it, which helps more
+than an answer to one person would.
+
 ## Use it
 
 Free to use, all of it. Scripts, kernel modules, documentation, the measurements, the dead ends.

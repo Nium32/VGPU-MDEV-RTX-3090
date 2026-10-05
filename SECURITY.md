@@ -73,8 +73,11 @@ Not vulnerabilities, but operational hazards with real consequences. The full li
 
 ## Reporting something
 
-Open an issue. If it is a real vulnerability rather than an operational hazard, say so in the title
-and leave out the exploit details until it is triaged.
+Open an issue **with a reproduction**. If it is a real vulnerability rather than an operational
+hazard, say so in the title and leave the exploit details out until it is triaged.
+
+Note that this project does not answer questions - see the No support section of the README. A
+security report with concrete steps will be read. A question will not be answered.
 
 Please do not report the following as vulnerabilities — they are documented, intentional, and
 explained above or in the tutorial:
