@@ -14,6 +14,8 @@ it will not work unmodified on your card.
 
 ## Status
 
+**If you cannot find something internet archive is a very good place to search for drivers.**
+
 What has been verified by reading data back, not by the absence of errors:
 
 | | result |
