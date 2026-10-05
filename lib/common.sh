@@ -33,6 +33,7 @@ for _cfg in "$VGPU_CONF" "$REPO_ROOT/vgpu.conf" /etc/vgpu.conf; do
 
         . "$_cfg"
 
+        # shellcheck disable=SC2034  # read by preflight.sh
         VGPU_CONF_USED="$_cfg"
 
         break
@@ -173,7 +174,8 @@ list_vgpu_types() {
 # A module built for one kernel cannot load on another: insmod fails on version
 # magic. So the tree is per-kernel and there is no generic fallback worth having.
 module_dir() {
-    local d="$VGPU_ROOT/driver/modules-$(uname -r)"
+    local d
+    d="$VGPU_ROOT/driver/modules-$(uname -r)"
     [ -d "$d" ] || return 1
     echo "$d"
 }
@@ -306,7 +308,7 @@ assert_not_a_backing_file() {
     # disk comes back "safe".
     base=$(readlink -f "${VM_BASE:-$(dirname "$(dirname "$disk")")}" 2>/dev/null)
     [ -d "$base" ] || return 0
-    for other in $(find "$base" -maxdepth 2 -name '*.qcow2' 2>/dev/null); do
+    while IFS= read -r other; do
         [ -f "$other" ] || continue
         [ "$other" = "$disk" ] && continue
         bf=$(qemu-img info -U --output=json "$other" 2>/dev/null \
@@ -317,7 +319,9 @@ assert_not_a_backing_file() {
             warn "Booting the backing file read-write would invalidate that overlay."
             return 1
         fi
-    done
+    done <<EOF
+$(find "$base" -maxdepth 2 -name '*.qcow2' 2>/dev/null)
+EOF
     return 0
 }
 

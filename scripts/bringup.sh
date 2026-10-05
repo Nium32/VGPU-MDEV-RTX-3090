@@ -92,7 +92,8 @@ info "version $(cat /sys/module/nvidia/version 2>/dev/null)"
 
 say "2. nvidia-vgpud"
 systemctl restart "$VGPUD_UNIT"; sleep 6
-systemctl is-active --quiet "$VGPUD_UNIT" \n    || die "$VGPUD_UNIT did not start - check: journalctl -u $VGPUD_UNIT"
+systemctl is-active --quiet "$VGPUD_UNIT" ||
+    die "$VGPUD_UNIT did not start - check: journalctl -u $VGPUD_UNIT"
 info "$VGPUD_UNIT active"
 
 say "3. nvidia-vgpu-vfio.ko"
@@ -134,7 +135,8 @@ mount -t debugfs none /sys/kernel/debug 2>/dev/null
 
 say "6. nvidia-vgpu-mgr (registers the mdev types)"
 systemctl restart "$VGPU_MGR_UNIT"; sleep 6
-systemctl is-active --quiet "$VGPU_MGR_UNIT" \n    || die "$VGPU_MGR_UNIT did not start - no mdev types will be registered"
+systemctl is-active --quiet "$VGPU_MGR_UNIT" ||
+    die "$VGPU_MGR_UNIT did not start - no mdev types will be registered"
 info "$VGPU_MGR_UNIT active"
 
 echo

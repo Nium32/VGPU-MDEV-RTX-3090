@@ -22,7 +22,8 @@ command -v uuidgen >/dev/null || die "uuidgen not installed (util-linux)"
 [ -f "$D/$VM_DISK" ] || die "disk $D/$VM_DISK does not exist"
 [ -f "$D/OVMF_VARS.fd" ] || die "$D/OVMF_VARS.fd missing; copy the 4MB OVMF vars template in"
 assert_own_nvram "$D/OVMF_VARS.fd"
-assert_not_a_backing_file "$D/$VM_DISK" \n    || die "refusing to boot $VM_DISK read-write: another image overlays it"
+assert_not_a_backing_file "$D/$VM_DISK" ||
+    die "refusing to boot $VM_DISK read-write: another image overlays it"
 
 OVMF=$(detect_ovmf) || die "no 4MB OVMF code image found; set OVMF_CODE in vgpu.conf"
 BDF=$(detect_gpu_bdf) || exit 1
@@ -61,8 +62,10 @@ if [ "${QEMU_VNC_DISPLAY:--1}" -ge 0 ] 2>/dev/null; then
     info "console on $QEMU_VNC_BIND:$((5900 + QEMU_VNC_DISPLAY)) - tunnel to it, do not expose it"
 fi
 
+# shellcheck disable=SC2054  # the commas belong to the QEMU argument values
 NET_ARG=(-netdev user,id=net0 -device e1000e,netdev=net0)
 if [ "${RDP_HOST_PORT:-0}" -gt 0 ]; then
+    # shellcheck disable=SC2054
     NET_ARG=(-netdev "user,id=net0,hostfwd=tcp:$RDP_BIND:$RDP_HOST_PORT-:3389" -device e1000e,netdev=net0)
     info "forwarding host port $RDP_HOST_PORT to guest 3389"
 fi

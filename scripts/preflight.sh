@@ -105,4 +105,7 @@ if [ "$problems" -eq 0 ]; then
 else
     say "preflight found $problems problem(s) - fix those before running bringup.sh"
 fi
-exit $([ "$problems" -eq 0 ] && echo 0 || echo 1)
+if [ "$problems" -eq 0 ]; then
+    exit 0
+fi
+exit 1

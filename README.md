@@ -78,6 +78,8 @@ kmod/isrfind/          finds the one-way call site on a driver build you do not 
 kmod/*                 read-only diagnostic probes used during the investigation
 notes/                 what was tried and what failed
 COMPATIBILITY.md       what works, what fails, what nobody has tried - please add rows
+CONTRIBUTING.md        what is most wanted, and the traps this codebase hit
+Makefile               make modules / make check / make install
 ```
 
 Start with `preflight.sh`. It discovers the GPU, its IOMMU group, the module set for your
