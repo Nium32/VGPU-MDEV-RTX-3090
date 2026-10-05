@@ -98,6 +98,12 @@ is tied to one driver build. Expect to re-derive things.
 
 ## Credit
 
-The device-ID unlock approach comes from the vgpu_unlock work by DualCoder and the Rust
-reimplementation `vgpu_unlock-rs` by mbilker. This repository does not redistribute any NVIDIA
-code, any driver installer, or any license.
+This builds directly on prior work: the unlock technique from **vgpu_unlock** (DualCoder), the
+**vgpu_unlock-rs** library (mbilker) that actually runs here, and the **vGPU-Unlock-Patcher**
+(VGPU-Community-Drivers) `general-merge` target that produced the driver. NVIDIA's **open GPU
+kernel modules** source was the reference that made the closed host blob readable.
+
+Full list, including the tooling and what was consulted and rejected:
+[REFERENCES.md](REFERENCES.md).
+
+No NVIDIA code, driver installer or license is redistributed in this repository.

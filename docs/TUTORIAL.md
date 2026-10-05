@@ -792,3 +792,12 @@ they never stay loaded.
 Read [../notes/WHAT-DIDNT-WORK.md](../notes/WHAT-DIDNT-WORK.md) before starting any deep
 investigation. Roughly 80 approaches were measured and most failed; several confident "root cause"
 conclusions in that list were wrong and had to be retracted. It will save you from repeating them.
+
+---
+
+## Credits
+
+The unlock technique, the library that implements it, the driver patcher, and the open-source RM
+reference that made the closed blob readable are all other people's work. See
+[../REFERENCES.md](../REFERENCES.md) for the full list and for what was consulted and found not to
+apply.
