@@ -12,8 +12,6 @@ that tell you in two minutes whether this can work for you at all.
 exactly one GPU — a GA102 RTX 3090 — and on exactly two kernels. It is not a general recipe and
 it will not work unmodified on your card.
 
-**If you cannot find something internet archive is a very good place to search for drivers**
-
 ## Status
 
 What has been verified by reading data back, not by the absence of errors:
@@ -98,6 +96,12 @@ Guests are reached over RDP, or by streaming.
 
 **No VRAM overcommit.** Profiles carve the 24 GB into fixed slices. The 8Q profile used here is
 8192 MB with a maximum of 3 concurrent instances.
+
+**Finding the drivers.** Both the host and guest drivers come from NVIDIA's licensing portal and
+are not public downloads. If a version has been withdrawn or you cannot reach the portal, the
+Internet Archive is a genuinely good place to look - older vGPU and GRID installers are often
+mirrored there. Check the version matches what you need exactly, because the kprobe offset is tied
+to one driver build.
 
 **No licensing bypass.** Unlocking the device gating is a separate thing from vGPU licensing.
 Guests still want a license or they degrade after a grace period.

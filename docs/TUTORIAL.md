@@ -263,6 +263,11 @@ Two things, neither of which this repository redistributes:
 You also want the matching consumer driver `.run` for the same version, because the merge step
 takes the userspace from it.
 
+If a version has been withdrawn from the portal, or you cannot get portal access for it, the
+Internet Archive is worth searching - older vGPU and GRID installers are frequently mirrored
+there. Verify the version exactly. 535.309.01 is the one with a known kprobe offset; anything else
+puts you in [FINDING-THE-ISR-OFFSET.md](FINDING-THE-ISR-OFFSET.md).
+
 ### The merge
 
 Use [vGPU-Unlock-Patcher](https://github.com/VGPU-Community-Drivers/vGPU-Unlock-Patcher) with the
