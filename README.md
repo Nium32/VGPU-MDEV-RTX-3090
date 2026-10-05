@@ -5,7 +5,8 @@ that do real work: CUDA, compiled PTX kernels, OpenGL, NVENC. The host keeps the
 same time and can run its own CUDA.
 
 **Start here: [docs/TUTORIAL.md](docs/TUTORIAL.md)** - the full walkthrough, bare machine to a
-working guest, with the reasoning and the failure mode at each step.
+working guest, with the reasoning and the failure mode at each step. It opens with five questions
+that tell you in two minutes whether this can work for you at all.
 
 **Read [docs/HARDWARE-SCOPE.md](docs/HARDWARE-SCOPE.md) before you start.** This is proven on
 exactly one GPU — a GA102 RTX 3090 — and on exactly two kernels. It is not a general recipe and
@@ -72,8 +73,11 @@ scripts/hardreset.sh   full teardown, including the vfio core
 scripts/as-run/        the original machine-specific versions, kept for provenance
 kmod/zfmulti/          required: suppresses the leaked runlist disable
 kmod/mdguest/          loaded by the working setup; measurably inert on this build
+kmod/isrfind/          finds the one-way call site on a driver build you do not have
+                       an offset for yet - this is what makes other versions tractable
 kmod/*                 read-only diagnostic probes used during the investigation
 notes/                 what was tried and what failed
+COMPATIBILITY.md       what works, what fails, what nobody has tried - please add rows
 ```
 
 Start with `preflight.sh`. It discovers the GPU, its IOMMU group, the module set for your

@@ -57,7 +57,8 @@
 # This spec is tied to the exact driver BUILD. The symbol name is anonymised by
 # NVIDIA and both the name and the offset move between driver versions. On
 # 535.309.01 it is _nv042311rm+0x28. On any other build you must locate it
-# yourself; see docs/FINDING-THE-ISR-OFFSET.md.
+# yourself. docs/FINDING-THE-ISR-OFFSET.md walks it through, and kmod/isrfind
+# automates the call-site attribution that used to be done by hand.
 #ZFMULTI_SPEC=_nv042311rm+0x28:1
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,59 @@ becomes reverse engineering rather than configuration.
 
 ---
 
+## Before you start: can you actually do this?
+
+Five questions. Answer them honestly now rather than discovering the answer in four hours.
+
+**1. Can you get the vGPU host driver?**
+
+You need `NVIDIA-Linux-x86_64-535.309.01-vgpu-kvm.run`. It comes from NVIDIA's licensing portal and
+is **not a public download**. No account, no project. Nothing in this repository can work around
+that, and nothing here redistributes it.
+
+**2. Is your GPU a GA102 — an RTX 3090?**
+
+If yes, continue. If it is a different Ampere card, you are probably close but step 5 is yours to
+redo. If it is Turing, Ada or Blackwell, treat everything here as a method rather than a recipe.
+`kmod/isrfind` automates the tedious part of step 5; it does not remove the need to read
+disassembly.
+
+**3. Will the portal give you 535.309.01 specifically?**
+
+The required kprobe is `_nv042311rm+0x28`, and that offset belongs to one driver build. On a
+different version it is almost certainly wrong, and the symptom is a guest that boots fine and
+computes nothing. See [FINDING-THE-ISR-OFFSET.md](FINDING-THE-ISR-OFFSET.md).
+
+**4. Are you willing to pin your kernel at 6.1.71 and leave it there?**
+
+Not "run 6.1 for now". Pinned, with `IgnorePkg` or `apt-mark hold`, because a routine upgrade
+silently destroys the setup. 6.8 and 6.18 both fail.
+
+**5. Are you comfortable with all of these?**
+
+Building out-of-tree kernel modules · reading `dmesg` and `journalctl` to diagnose · raw QEMU
+command lines · systemd units and drop-ins · editing a Windows registry hive, possibly offline ·
+accepting that a mistake may wedge the GPU and need a power cycle.
+
+### Scoring
+
+- **All five yes** → the tutorial will work for you. Allow a few hours.
+- **No on 2 or 3** → you can still do it, but budget for reverse engineering, and read
+  [../notes/WHAT-DIDNT-WORK.md](../notes/WHAT-DIDNT-WORK.md) before you start so you do not repeat
+  80 measured dead ends.
+- **No on 1** → stop. This is the one gate with no workaround.
+- **No on 5** → this is not a good first Linux project. The failure modes are quiet and the
+  recovery paths involve kernel modules.
+
+### If you are only here to read
+
+That is a legitimate use and possibly the better one. The two documents worth your time are
+[../notes/WHAT-DIDNT-WORK.md](../notes/WHAT-DIDNT-WORK.md), which is roughly 80 measured negatives
+and a list of confident conclusions that turned out wrong, and Part 5 below, which describes a
+runlist-disable leak that a survey of published work did not find documented anywhere.
+
+---
+
 ## Part 0: what you are actually building, and what you are not
 
 ### The picture
@@ -385,7 +438,13 @@ That is the default in `vgpu.conf.example` and you can move on.
 
 ### If you are not, you have to find it yourself
 
-This is the genuinely hard part and there is no shortcut. The symbol names are anonymised by
+This used to be the genuinely hard part. Most of it is now automated: `kmod/isrfind` places a
+kprobe on the function that performs the enable/disable, records the return address of every call,
+and prints a table of call sites with their enable and disable counts. The one-way site is flagged
+for you. See [FINDING-THE-ISR-OFFSET.md](FINDING-THE-ISR-OFFSET.md) for the full procedure.
+
+What is still manual: identifying the writer function in the first place, and disassembling the one
+small function `isrfind` points you at. The symbol names are anonymised by
 NVIDIA, and both the name and the offset move between driver versions. Even within 535.309.01, the
 same symbol sat at two different addresses across two kernel builds.
 
