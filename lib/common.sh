@@ -136,6 +136,12 @@ resolve_vgpu_type() {
     dir=$(mdev_types_dir "$bdf")
     [ -d "$dir" ] || return 1
 
+    if [ -z "$VGPU_PROFILE_NAME" ] && [ -z "$VGPU_TYPE" ]; then
+        warn "VGPU_PROFILE_NAME is not set and there is no default for it."
+        warn "Set it in vgpu.conf to a profile NAME your card offers, e.g. RTXA5000-8Q."
+        warn "preflight.sh lists every profile available on this GPU."
+        return 1
+    fi
     if [ -n "$VGPU_PROFILE_NAME" ]; then
         for t in "$dir"/*; do
             [ -r "$t/name" ] || continue

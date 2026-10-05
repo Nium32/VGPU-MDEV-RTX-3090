@@ -52,8 +52,13 @@ correct for anything else. See the note at the end of KERNEL-REQUIREMENTS.md.
 cp vgpu.conf.example vgpu.conf
 ```
 
-You can start by editing nothing. Every value is either defaulted or discovered. The ones most
-likely to need setting are `VGPU_ROOT`, `VM_BASE`, `VM_NAME` and `VM_DISK`.
+The file has a REQUIRED block at the top that is live rather than commented out, because the
+defaults cannot be right for your machine. Edit those: `VGPU_ROOT`, `VM_BASE`,
+`VGPU_PROFILE_NAME`, `VM_NAME` and `VM_DISK`.
+
+`VGPU_PROFILE_NAME` has no default at all. Leave it unset and `startguest.sh` fails with "no vGPU
+profile resolved". Everything below the REQUIRED block is commented out and already carries a
+working default, so uncomment a line only when you need to change it.
 
 Set `VGPU_PROFILE_NAME` to a profile *name* such as `RTXA5000-8Q`, not to an `nvidia-NNN` id. The
 numeric ids are assigned per driver version and per board and will not match yours.

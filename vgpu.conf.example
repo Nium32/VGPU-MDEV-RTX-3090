@@ -1,57 +1,84 @@
-# Copy to vgpu.conf and edit. Every value here has a sane default or is auto-detected,
-# so start by setting nothing and run ./scripts/preflight.sh to see what was found.
+# Copy this to vgpu.conf and edit the REQUIRED block below.
 #
-# Anything you set here wins over auto-detection.
+#     cp vgpu.conf.example vgpu.conf
+#     $EDITOR vgpu.conf
+#     sudo ./scripts/preflight.sh
+#
+# The required settings are live (not commented) because the defaults cannot be
+# right for your machine - in particular there is no sensible default for the
+# vGPU profile, and leaving it unset makes startguest.sh fail with
+# "no vGPU profile resolved".
+#
+# Everything in the OPTIONAL section is commented out and already has a working
+# default. Uncomment a line only when you need to change it.
+#
+# vgpu.conf is gitignored: it holds your PCI address and paths, so it should not
+# be committed.
 
-# ---------------------------------------------------------------------------
-# Where things live
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# REQUIRED - edit these
+# ===========================================================================
 
-# Data filesystem holding driver trees, module sources and VM images.
+# The data filesystem holding driver trees, module sources and VM images.
 # Expected layout underneath:
 #   $VGPU_ROOT/driver/modules-<uname -r>/   nvidia.ko and friends, per kernel
 #   $VGPU_ROOT/kmod/zfmulti/                required kprobe module
 #   $VGPU_ROOT/kmod/mdguest/                required helper module
-#VGPU_ROOT=/srv/vgpu/VMs
+VGPU_ROOT=/srv/vgpu/VMs
 
-# Where the VM directories live. Each guest gets its own subdirectory holding
-# its qcow2 and its OVMF_VARS.fd.
-#VM_BASE=/var/lib/vgpu-vm
+# Where the guest directories live. Each guest gets its own subdirectory
+# holding its qcow2 and its own OVMF_VARS.fd.
+VM_BASE=/var/lib/vgpu-vm
 
-# Log destination. Scripts append rather than truncate.
+# The vGPU profile to give the guest. THIS HAS NO DEFAULT.
+#
+# Use the NAME, not the nvidia-NNN type id: the numeric id is assigned per
+# driver version and per board and will not match yours. preflight.sh lists
+# every profile your card offers, with framebuffer sizes and availability.
+#
+# RTXA5000-8Q is what a GeForce RTX 3090 presents when spoofed to an A5000.
+VGPU_PROFILE_NAME=RTXA5000-8Q
+
+# The guest. VM_DISK is relative to $VM_BASE/$VM_NAME/, so this expects
+#   /var/lib/vgpu-vm/winguest/win.qcow2
+#   /var/lib/vgpu-vm/winguest/OVMF_VARS.fd
+VM_NAME=winguest
+VM_DISK=win.qcow2
+
+# ===========================================================================
+# OPTIONAL - every line below is already the working default
+# ===========================================================================
+
+# --- paths -----------------------------------------------------------------
+
+# Scripts append here rather than truncating.
 #LOG_DIR=/var/log/vgpu
 
-# ---------------------------------------------------------------------------
-# GPU
-# ---------------------------------------------------------------------------
+# --- GPU -------------------------------------------------------------------
 
-# PCI address of the GPU, domain included. Leave unset to auto-detect the first
-# NVIDIA display controller. Set it explicitly if the machine has more than one.
+# PCI address of the GPU, domain included. Auto-detected from sysfs when
+# unset. Set it explicitly only if the machine has more than one NVIDIA card -
+# detection deliberately refuses to guess between them.
 #   lspci -D -d 10de::0300
 #GPU_BDF=0000:0a:00.0
 
-# The vGPU profile to hand the guest. Prefer the NAME, not the nvidia-NNN type
-# id: the numeric id differs between driver versions and between boards, the
-# name does not. preflight.sh lists what your card offers.
-#VGPU_PROFILE_NAME=RTXA5000-8Q
-
-# Only used if VGPU_PROFILE_NAME finds nothing. Hard-codes the type directory.
+# Only consulted if VGPU_PROFILE_NAME above matches nothing. Hard-codes the
+# type directory instead of resolving by name.
 #VGPU_TYPE=nvidia-664
 
-# Parameters written to the mdev's nvidia/vgpu_params before the guest starts.
+# Written to the mdev's nvidia/vgpu_params before the guest starts.
 #VGPU_PARAMS=loglevel=5,disable_vnc=1
 
 # Module parameters for nvidia.ko. RMSetSriovMode=0 selects the legacy mdev
-# path, which is the only one consumer Ampere can use.
+# path, which is the only one consumer Ampere can use. GSP cannot boot on this
+# card, so the firmware stays off.
 #NVIDIA_REGISTRY_DWORDS=RMSetSriovMode=0
 #NVIDIA_ENABLE_GPU_FIRMWARE=0
 
-# ---------------------------------------------------------------------------
-# The one required intervention
-# ---------------------------------------------------------------------------
+# --- the one required intervention -----------------------------------------
 
-# zfmulti forces a zero flag at an offset inside the RM interrupt handler that
-# otherwise leaks a GR runlist disable with no matching re-enable. Without it
+# zfmulti forces a zero flag at one branch in the RM interrupt handler. That
+# branch otherwise parks the graphics runlist with nothing re-enabling it, and
 # the guest's graphics channel is scheduled once and then never again.
 #
 # This spec is tied to the exact driver BUILD. The symbol name is anonymised by
@@ -61,57 +88,47 @@
 # automates the call-site attribution that used to be done by hand.
 #ZFMULTI_SPEC=_nv042311rm+0x28:1
 
-# ---------------------------------------------------------------------------
-# Guest
-# ---------------------------------------------------------------------------
+# --- guest sizing ----------------------------------------------------------
 
-#VM_NAME=winguest
-#VM_DISK=win.qcow2
 #VM_MEM_MB=12288
 #VM_CORES=4
 #VM_THREADS=2
 
-# OVMF firmware. Auto-detected across the common distro paths; set it if your
-# distribution puts it somewhere unusual. Must be the 4MB variant to match the
-# 4MB OVMF_VARS.fd these VMs use.
+# OVMF firmware. Searched across the common distribution paths when unset.
+# Must pair with your 4MB OVMF_VARS.fd - a 2MB code image will not boot
+# against it. Note "4m" names the CODE+VARS layout, not the file size.
 #OVMF_CODE=/usr/share/edk2/x64/OVMF_CODE.4m.fd
+
+# --- network exposure ------------------------------------------------------
 
 # Host port forwarded to the guest's RDP port 3389. 0 disables the forward.
 #RDP_HOST_PORT=3390
 
-# QEMU's own VNC display number, so you can see the guest before it has RDP up.
+# QEMU's own VNC display number, so you can see the guest before RDP is up.
 # Display N listens on port 5900+N. Set to -1 to disable.
 #QEMU_VNC_DISPLAY=2
 
-# ---------------------------------------------------------------------------
-# Kernel allow-list
-# ---------------------------------------------------------------------------
-
-# Kernels this has actually been made to work on. preflight.sh warns loudly when
-# the running kernel is not in this list, because the failure mode on an
-# untested kernel is a slow one: the stack loads, the guest boots, and the
-# framebuffer blit times out thousands of times.
-#KERNEL_KNOWN_GOOD="5.15.95 6.1.71"
-
-# ---------------------------------------------------------------------------
-# Network exposure
-# ---------------------------------------------------------------------------
-
-# Address QEMU's own VNC console binds to. Loopback by default: that console is
+# Address the QEMU VNC console binds to. Loopback by default: that console is
 # an unauthenticated keyboard, mouse and screen for the guest, so putting it on
 # 0.0.0.0 hands guest control to anyone who can reach the host. Tunnel instead:
 #   ssh -L 5902:127.0.0.1:5902 user@host
 #QEMU_VNC_BIND=127.0.0.1
 
-# Address the forwarded RDP port binds to. Loopback by default for the same
-# reason, even though RDP itself is authenticated.
+# Address the forwarded RDP port binds to. Loopback for the same reason, even
+# though RDP itself is authenticated.
 #RDP_BIND=127.0.0.1
 
-# ---------------------------------------------------------------------------
-# systemd unit names
-# ---------------------------------------------------------------------------
+# --- systemd unit names ----------------------------------------------------
 
-# The NVIDIA vGPU daemons. Override if your driver packaging names them
-# differently, e.g. a versioned pair installed alongside a distro driver.
+# Override if your driver packaging names them differently, for example a
+# versioned pair installed alongside a distribution driver.
 #VGPUD_UNIT=nvidia-vgpud
 #VGPU_MGR_UNIT=nvidia-vgpu-mgr
+
+# --- kernel allow-list -----------------------------------------------------
+
+# Kernels this has actually been made to work on. preflight.sh warns loudly
+# when the running kernel is not in this list, because the failure mode on an
+# untested kernel is a slow one: the stack loads, the guest boots, and the
+# framebuffer blit times out thousands of times.
+#KERNEL_KNOWN_GOOD="5.15.95 6.1.71"

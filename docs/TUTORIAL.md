@@ -501,7 +501,9 @@ cd VGPU-MDEV-RTX-3090
 cp vgpu.conf.example vgpu.conf
 ```
 
-Set the paths and the profile **by name**:
+Those five settings are the REQUIRED block at the top of the file, and they are live rather than
+commented out on purpose - the defaults cannot be right for your machine, and `VGPU_PROFILE_NAME`
+has no default at all. Edit them:
 
 ```bash
 VGPU_ROOT=/srv/vgpu/VMs
@@ -512,7 +514,11 @@ VGPU_PROFILE_NAME=RTXA5000-8Q
 ```
 
 Use the name, not an `nvidia-NNN` id. The numeric ids are assigned per driver version and per
-board and will not match yours.
+board and will not match yours. Leave `VGPU_PROFILE_NAME` unset and `startguest.sh` stops with "no
+vGPU profile resolved".
+
+Everything below the REQUIRED block is commented out and already carries a working default, so
+uncomment a line only to change it.
 
 Then:
 
