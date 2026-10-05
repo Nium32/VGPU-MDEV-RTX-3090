@@ -37,7 +37,7 @@ setsid x11vnc -display :1 -rfbport 5901 -forever -shared -rfbauth "$HOME/.vnc/pa
 sleep 4
 echo "  x11vnc: $(pgrep -cf 'x11vnc -display :1')"
 ss -ltn 2>/dev/null | grep -E "5901" | sed 's/^/    /'
-sudo ufw allow from <your-subnet>/24 to any port 5901 proto tcp comment 'vGPU host KDE over VNC' >/dev/null 2>&1
+sudo ufw allow from ${VNC_ALLOW_SUBNET:?set VNC_ALLOW_SUBNET, e.g. 10.0.0.0/24} to any port 5901 proto tcp comment 'vGPU host KDE over VNC' >/dev/null 2>&1
 sudo ufw status 2>/dev/null | grep 5901 | sed 's/^/    /'
 
 say "D  VERDICT - X11 and the VM at the same time?"

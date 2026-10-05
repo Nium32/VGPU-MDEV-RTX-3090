@@ -91,3 +91,26 @@
 # untested kernel is a slow one: the stack loads, the guest boots, and the
 # framebuffer blit times out thousands of times.
 #KERNEL_KNOWN_GOOD="5.15.95 6.1.71"
+
+# ---------------------------------------------------------------------------
+# Network exposure
+# ---------------------------------------------------------------------------
+
+# Address QEMU's own VNC console binds to. Loopback by default: that console is
+# an unauthenticated keyboard, mouse and screen for the guest, so putting it on
+# 0.0.0.0 hands guest control to anyone who can reach the host. Tunnel instead:
+#   ssh -L 5902:127.0.0.1:5902 user@host
+#QEMU_VNC_BIND=127.0.0.1
+
+# Address the forwarded RDP port binds to. Loopback by default for the same
+# reason, even though RDP itself is authenticated.
+#RDP_BIND=127.0.0.1
+
+# ---------------------------------------------------------------------------
+# systemd unit names
+# ---------------------------------------------------------------------------
+
+# The NVIDIA vGPU daemons. Override if your driver packaging names them
+# differently, e.g. a versioned pair installed alongside a distro driver.
+#VGPUD_UNIT=nvidia-vgpud
+#VGPU_MGR_UNIT=nvidia-vgpu-mgr

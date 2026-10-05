@@ -21,7 +21,9 @@ need_root
 
 REGSTR="${1:-$NVIDIA_REGISTRY_DWORDS}"
 mkdir -p "$LOG_DIR"
-exec >> "$LOG_DIR/hardreset.log" 2>&1
+# tee, not plain redirect: with a plain redirect every die() and warn() goes
+# only to the log and the operator sees a silent prompt return.
+exec > >(tee -a "$LOG_DIR/hardreset.log") 2>&1
 
 BDF=$(detect_gpu_bdf) || exit 1
 GROUP=$(gpu_iommu_group "$BDF")

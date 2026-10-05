@@ -20,7 +20,9 @@ set +e
 need_root
 
 mkdir -p "$LOG_DIR"
-exec >> "$LOG_DIR/bringup.log" 2>&1
+# tee, not plain redirect: with a plain redirect every die() and warn() goes
+# only to the log and the operator sees a silent prompt return.
+exec > >(tee -a "$LOG_DIR/bringup.log") 2>&1
 
 echo "================ $(date '+%F %T') bring-up ================"
 
@@ -38,9 +40,21 @@ done
 info "modules from $MDIR"
 
 say "tear down whatever is running"
-pkill -KILL -f "qemu-system.*$VM_NAME" 2>/dev/null; sleep 3
-for m in $(ls /sys/bus/mdev/devices/ 2>/dev/null); do
-    timeout 30 sh -c "echo 1 > /sys/bus/mdev/devices/$m/remove" 2>/dev/null
+# SIGKILL leaves the IOMMU group wedged; qemu releases the vfio device on TERM.
+pkill -TERM -f "qemu-system.*$VM_NAME" 2>/dev/null
+for _i in $(seq 1 20); do pgrep -f "qemu-system.*$VM_NAME" >/dev/null || break; sleep 1; done
+pgrep -f "qemu-system.*$VM_NAME" >/dev/null && { warn "guest did not exit on TERM, forcing"; pkill -KILL -f "qemu-system.*$VM_NAME"; sleep 3; }
+for _m in /sys/bus/mdev/devices/*; do
+    [ -e "$_m" ] || continue
+    _m=${_m##*/}
+    # Writing remove on an mdev that a live qemu still has open blocks in
+    # vfio_unregister_group_dev, and the retry there is uninterruptible, so
+    # even timeout cannot get us back.
+    if grep -lqs "$_m" /proc/[0-9]*/cmdline 2>/dev/null; then
+        warn "mdev $_m is in use by a live process, leaving it alone"
+        continue
+    fi
+    timeout 30 sh -c "echo 1 > /sys/bus/mdev/devices/$_m/remove" 2>/dev/null
 done
 systemctl stop nvidia-vgpu-mgr nvidia-vgpud 2>/dev/null
 rmmod zfmulti mdguest 2>/dev/null
@@ -52,6 +66,7 @@ info "nvidia modules still loaded: $left"
 [ "$left" -ne 0 ] && die "refusing to reset the GPU while nvidia modules are loaded"
 
 say "pci function-level reset"
+safe_to_reset "$BDF" || die "refusing to reset $BDF while a driver is bound to it"
 if echo 1 > "/sys/bus/pci/devices/$BDF/reset" 2>/dev/null; then
     info "reset ok"
 else
@@ -76,8 +91,9 @@ udevadm settle --timeout=15
 info "version $(cat /sys/module/nvidia/version 2>/dev/null)"
 
 say "2. nvidia-vgpud"
-systemctl restart nvidia-vgpud; sleep 6
-systemctl is-active nvidia-vgpud | sed 's|^|     vgpud: |'
+systemctl restart "$VGPUD_UNIT"; sleep 6
+systemctl is-active --quiet "$VGPUD_UNIT" \n    || die "$VGPUD_UNIT did not start - check: journalctl -u $VGPUD_UNIT"
+info "$VGPUD_UNIT active"
 
 say "3. nvidia-vgpu-vfio.ko"
 insmod "$MDIR/nvidia-vgpu-vfio.ko" || die "insmod nvidia-vgpu-vfio.ko failed"
@@ -109,14 +125,17 @@ else
     warn "guest will boot, but its graphics channel will never run."
 fi
 if MG=$(helper_ko mdguest); then
-    insmod "$MG" apply=1 && info "mdguest apply=1"
+    insmod "$MG" apply=1 && info "mdguest apply=1" || warn "mdguest failed to load"
+else
+    warn "mdguest not available for this kernel"
 fi
 mount -t debugfs none /sys/kernel/debug 2>/dev/null
 [ -r /sys/kernel/debug/kprobes/list ] && sed 's|^|     |' /sys/kernel/debug/kprobes/list
 
 say "6. nvidia-vgpu-mgr (registers the mdev types)"
-systemctl restart nvidia-vgpu-mgr; sleep 6
-systemctl is-active nvidia-vgpu-mgr | sed 's|^|     mgr: |'
+systemctl restart "$VGPU_MGR_UNIT"; sleep 6
+systemctl is-active --quiet "$VGPU_MGR_UNIT" \n    || die "$VGPU_MGR_UNIT did not start - no mdev types will be registered"
+info "$VGPU_MGR_UNIT active"
 
 echo
 say "state"
@@ -132,4 +151,8 @@ else
 fi
 info "xid in dmesg  : $(dmesg | grep -ci xid)"
 info "plugin errors : $(journalctl -t nvidia-vgpu-mgr --since '2 min ago' --no-pager 2>/dev/null | grep -ci 'error:')"
+if [ -z "${T:-}" ]; then
+    warn "no usable vGPU profile resolved - the stack is NOT ready"
+    exit 1
+fi
 echo "================ ready ================"

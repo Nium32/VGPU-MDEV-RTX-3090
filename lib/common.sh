@@ -12,13 +12,33 @@
 _here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$_here/.." && pwd)"
 
+
+# An explicitly requested config that cannot be read is an error, not a reason to
+
+# silently fall back to different settings.
+
+if [ -n "$VGPU_CONF" ] && [ ! -r "$VGPU_CONF" ]; then
+
+    echo "XX VGPU_CONF=$VGPU_CONF is not readable" >&2
+
+    exit 1
+
+fi
+
 for _cfg in "$VGPU_CONF" "$REPO_ROOT/vgpu.conf" /etc/vgpu.conf; do
+
     if [ -n "$_cfg" ] && [ -r "$_cfg" ]; then
+
         # shellcheck disable=SC1090
+
         . "$_cfg"
+
         VGPU_CONF_USED="$_cfg"
+
         break
+
     fi
+
 done
 
 VGPU_ROOT="${VGPU_ROOT:-/srv/vgpu/VMs}"
@@ -35,6 +55,10 @@ VM_CORES="${VM_CORES:-4}"
 VM_THREADS="${VM_THREADS:-2}"
 RDP_HOST_PORT="${RDP_HOST_PORT:-3390}"
 QEMU_VNC_DISPLAY="${QEMU_VNC_DISPLAY:-2}"
+QEMU_VNC_BIND="${QEMU_VNC_BIND:-127.0.0.1}"
+RDP_BIND="${RDP_BIND:-127.0.0.1}"
+VGPUD_UNIT="${VGPUD_UNIT:-nvidia-vgpud}"
+VGPU_MGR_UNIT="${VGPU_MGR_UNIT:-nvidia-vgpu-mgr}"
 KERNEL_KNOWN_GOOD="${KERNEL_KNOWN_GOOD:-5.15.95 6.1.71}"
 VGPU_PROFILE_NAME="${VGPU_PROFILE_NAME:-}"
 VGPU_TYPE="${VGPU_TYPE:-}"
@@ -64,10 +88,20 @@ detect_gpu_bdf() {
         [ -d "/sys/bus/pci/devices/$GPU_BDF" ] || die "GPU_BDF=$GPU_BDF does not exist in sysfs"
         echo "$GPU_BDF"; return
     fi
-    local found
-    found=$(lspci -D -d '10de::0300' 2>/dev/null | awk '{print $1}' | head -1)
-    [ -n "$found" ] || die "no NVIDIA display controller found; set GPU_BDF in vgpu.conf"
-    echo "$found"
+    # Read sysfs directly rather than parsing lspci: no external dependency, and
+    # class 0x03* covers 3D controllers (0302) as well as VGA (0300).
+    local d found="" n=0
+    for d in /sys/bus/pci/devices/*; do
+        [ "$(cat "$d/vendor" 2>/dev/null)" = "0x10de" ] || continue
+        case "$(cat "$d/class" 2>/dev/null)" in
+            0x03*) found="$found ${d##*/}"; n=$((n+1)) ;;
+        esac
+    done
+    [ "$n" -eq 0 ] && die "no NVIDIA GPU found in sysfs; set GPU_BDF in vgpu.conf"
+    if [ "$n" -gt 1 ]; then
+        die "found $n NVIDIA GPUs ($found). Set GPU_BDF so the wrong card is not reset."
+    fi
+    echo "${found# }"
 }
 
 # Real vendor:device of the card, straight from sysfs rather than a cached guess.
@@ -81,9 +115,10 @@ gpu_pci_id() {
 # IOMMU group number. Needed because a SIGKILLed qemu can wedge the group and
 # the recovery path has to name it.
 gpu_iommu_group() {
-    local l
-    l=$(readlink -f "/sys/bus/pci/devices/$1/iommu_group" 2>/dev/null)
-    [ -n "$l" ] && basename "$l"
+    # readlink -f returns a path even when the final component is absent, which
+    # would yield the literal string "iommu_group" on a host with no IOMMU.
+    [ -L "/sys/bus/pci/devices/$1/iommu_group" ] || return 1
+    basename "$(readlink -f "/sys/bus/pci/devices/$1/iommu_group")"
 }
 
 # Always address mdev types through /sys/bus/pci/devices/<bdf>/, never through a
@@ -177,7 +212,9 @@ detect_ovmf() {
         /usr/share/qemu/ovmf-x86_64-code.bin \
         /usr/share/edk2/ovmf/OVMF_CODE.fd
     do
-        [ -r "$c" ] && { echo "$c"; return; }
+        # A 2MB CODE image with a 4MB VARS file does not boot, and some distributions
+        # still ship the 2MB one under a generic name.
+        [ -r "$c" ] && [ "$(stat -c %s "$c" 2>/dev/null)" = "4194304" ] && { echo "$c"; return; }
     done
     return 1
 }
@@ -220,4 +257,20 @@ check_modeset_absent() {
         return 1
     fi
     return 0
+}
+
+# A module-name check is not enough: nouveau, nvidiafb or vfio-pci bound to the
+# card all pass "is nvidia in lsmod" and would then be reset underneath.
+bound_driver() {
+    local l
+    l=$(readlink -f "/sys/bus/pci/devices/$1/driver" 2>/dev/null) || return 1
+    [ -n "$l" ] && basename "$l"
+}
+
+safe_to_reset() {
+    local drv
+    drv=$(bound_driver "$1")
+    [ -z "$drv" ] && return 0
+    warn "$1 is still bound to driver '$drv'"
+    return 1
 }

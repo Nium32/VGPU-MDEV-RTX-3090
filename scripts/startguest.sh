@@ -47,17 +47,22 @@ date '+%Y-%m-%d %H:%M:%S' > /tmp/vgpu-mark.txt
 
 rm -f "$D/monitor.sock"
 
-VNC_ARG=()
-[ "${QEMU_VNC_DISPLAY:--1}" -ge 0 ] && VNC_ARG=(-vga std -vnc "0.0.0.0:$QEMU_VNC_DISPLAY")
+# Bind the QEMU console to loopback. Binding it to 0.0.0.0 with no password
+# hands anyone on the network the guest keyboard, mouse and screen.
+VNC_ARG=(-display none)
+if [ "${QEMU_VNC_DISPLAY:--1}" -ge 0 ] 2>/dev/null; then
+    VNC_ARG=(-vga std -vnc "$QEMU_VNC_BIND:$QEMU_VNC_DISPLAY")
+    info "console on $QEMU_VNC_BIND:$((5900 + QEMU_VNC_DISPLAY)) - tunnel to it, do not expose it"
+fi
 
 NET_ARG=(-netdev user,id=net0 -device e1000e,netdev=net0)
 if [ "${RDP_HOST_PORT:-0}" -gt 0 ]; then
-    NET_ARG=(-netdev "user,id=net0,hostfwd=tcp::$RDP_HOST_PORT-:3389" -device e1000e,netdev=net0)
+    NET_ARG=(-netdev "user,id=net0,hostfwd=tcp:$RDP_BIND:$RDP_HOST_PORT-:3389" -device e1000e,netdev=net0)
     info "forwarding host port $RDP_HOST_PORT to guest 3389"
 fi
 
 say "booting $VM_NAME"
-qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
+setsid qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
     -machine q35,accel=kvm,hpet=off \
     -smp "sockets=1,cores=$VM_CORES,threads=$VM_THREADS" -m "$VM_MEM_MB" \
     -rtc base=localtime,driftfix=slew -global kvm-pit.lost_tick_policy=discard \
@@ -66,7 +71,7 @@ qemu-system-x86_64 -name "$VM_NAME" -uuid "$U" \
     -cpu host,kvm=on,hv_relaxed,hv_spinlocks=0x1fff,hv_vapic,hv_time,hv_vpindex,hv_synic,hv_stimer \
     "${VNC_ARG[@]}" \
     -device qemu-xhci,id=xhci -device usb-tablet,bus=xhci.0 -device usb-kbd,bus=xhci.0 \
-    -device "vfio-pci,sysfsdev=/sys/bus/mdev/devices/$U,enable-migration=off" \
+    -device "vfio-pci,sysfsdev=/sys/bus/mdev/devices/$U" \
     -boot menu=off -monitor "unix:$D/monitor.sock,server,nowait" \
     -device ich9-ahci,id=ahci \
     -drive "file=$D/$VM_DISK,if=none,id=disk0,format=qcow2,cache=writeback,discard=unmap" \

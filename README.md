@@ -4,6 +4,9 @@ NVIDIA's vGPU stack, running on a consumer RTX 3090 through the legacy mdev path
 that do real work: CUDA, compiled PTX kernels, OpenGL, NVENC. The host keeps the card at the
 same time and can run its own CUDA.
 
+**Start here: [docs/TUTORIAL.md](docs/TUTORIAL.md)** - the full walkthrough, bare machine to a
+working guest, with the reasoning and the failure mode at each step.
+
 **Read [docs/HARDWARE-SCOPE.md](docs/HARDWARE-SCOPE.md) before you start.** This is proven on
 exactly one GPU — a GA102 RTX 3090 — and on exactly two kernels. It is not a general recipe and
 it will not work unmodified on your card.
@@ -59,6 +62,7 @@ including what was ruled out as the cause, is in [docs/KERNEL-REQUIREMENTS.md](d
 ## Layout
 
 ```
+docs/TUTORIAL.md        the full walkthrough - read this first
 vgpu.conf.example      every tunable, with defaults and auto-detection
 lib/common.sh          config loading, hardware discovery, sanity checks
 scripts/preflight.sh   report what this machine looks like; changes nothing
