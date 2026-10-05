@@ -40,7 +40,7 @@ Testing 6.6 LTS would be the single most valuable datapoint anyone could contrib
 | RTX 3070 / 3060 | GA104/GA106 | | | **untried** | different chip, FIFO map may differ |
 | Turing (20-series) | TUxxx | | | **untried** | |
 | Ada (40-series) | ADxxx | | | **untried** | |
-| Blackwell (50-series) | GBxxx | | | believed no | an external project established consumer VF PRIV registers are fused off |
+| Blackwell (50-series) | GB202 | | | **no** | fused off in hardware. [bird/vgpu-unlock-blackwell](https://github.com/bird/vgpu-unlock-blackwell) got the whole CPU-side pipeline working and still hit it: VF PRIV regs at `0x111xxx` read `0xbadf1002`, and the plugin now lives in GSP firmware with nothing left to intercept |
 
 Anything that is not GA102 needs the ISR offset re-derived. That is
 [docs/FINDING-THE-ISR-OFFSET.md](docs/FINDING-THE-ISR-OFFSET.md), and `kmod/isrfind` automates the

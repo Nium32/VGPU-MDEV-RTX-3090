@@ -95,10 +95,27 @@ Published consumer-vGPU writeups circulating under the `kkk.rs` name were review
 license and branding patches only — gates that were already cleared here — and nothing about
 scheduling, which was the actual blocker in this project.
 
-A separate Blackwell-focused consumer vGPU effort was reviewed and independently established that
-consumer virtual-function PRIV registers are fused off on that generation. Useful for scoping, not
-applicable to GA102. The project name was not recorded in the notes, so it is not cited here rather
-than cited wrongly.
+**vgpu-unlock-blackwell** - bird
+<https://github.com/bird/vgpu-unlock-blackwell>
+
+The same question asked of a much newer chip, and the clearest statement anywhere of why this gets
+harder rather than easier. Targeting the RTX 5090 (GB202), that project got the entire CPU-side
+pipeline working across 19 binary patches and then hit a wall that is not software at all: the VF
+PRIV registers at `0x111xxx` are fused off on consumer silicon, returning `0xbadf1002` through both
+the RM aperture and raw BAR0, so GSP firmware crashes the moment it touches them.
+
+Its architectural conclusion is worth reading before anyone assumes this repository transfers
+forward. On Turing the vGPU plugin ran as CPU code inside the kernel module, which is what made
+`vgpu_unlock` possible. On Blackwell the plugin runs inside GSP firmware on a dedicated RISC-V core
+with direct memory-mapped hardware access, so there is no software layer left to intercept.
+
+That project also documented something this one saw from a different angle: NVIDIA ships the same
+`nv-kernel.o_binary` and GSP firmware to consumer and enterprise customers, and the separation is a
+device-ID allowlist plus a compile flag - and, on Blackwell, fuses.
+
+Ampere sits between those two worlds, which is why the work here was possible at all: GA102 has no
+SR-IOV to fuse off, the RM core still runs on the CPU, and the blocker turned out to be a
+scheduling bug reachable with a kprobe.
 
 The conclusion of that survey: **no published implementation of this exists.** The runlist-disable
 leak described in the tutorial does not appear in any public write-up found, which is why this

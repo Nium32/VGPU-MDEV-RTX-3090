@@ -107,7 +107,10 @@ Items 2 and 5 are reverse engineering, not setup.
 ## Explicitly not tested
 
 - Any other Ampere card, including the 3080, 3090 Ti and the A-series proper
-- Any other GPU generation: Turing, Ada, Blackwell
+- Any other GPU generation: Turing, Ada, Blackwell. For Blackwell specifically the answer is already
+  known and it is no - see [bird/vgpu-unlock-blackwell](https://github.com/bird/vgpu-unlock-blackwell),
+  where the VF PRIV registers are fused off in silicon and the vGPU plugin has moved into GSP
+  firmware, leaving no software layer to intercept
 - Any other motherboard or CPU
 - Any other host distribution. It is arch-like here; nothing should depend on that, but nothing
   proves it either.
