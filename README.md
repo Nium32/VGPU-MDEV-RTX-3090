@@ -107,3 +107,14 @@ Full list, including the tooling and what was consulted and rejected:
 [REFERENCES.md](REFERENCES.md).
 
 No NVIDIA code, driver installer or license is redistributed in this repository.
+
+## Donations
+
+This took a long time and the result is given away. If it saved you some of that time and you feel
+like it, Monero:
+
+```
+47BzeT42HzDArmPkUTrCQ2D1VidW4LiwA9L4E3k5ENrZVN7WPTx8yw2NHLcmQY7b9JBEgvvNSWUmqPmmGXdpLe6Y8QKniEs
+```
+
+Receive-only. Entirely optional, and nothing here is gated behind it.
