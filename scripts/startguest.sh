@@ -21,6 +21,8 @@ command -v uuidgen >/dev/null || die "uuidgen not installed (util-linux)"
 [ -d "$D" ] || die "guest directory $D does not exist"
 [ -f "$D/$VM_DISK" ] || die "disk $D/$VM_DISK does not exist"
 [ -f "$D/OVMF_VARS.fd" ] || die "$D/OVMF_VARS.fd missing; copy the 4MB OVMF vars template in"
+assert_own_nvram "$D/OVMF_VARS.fd"
+assert_not_a_backing_file "$D/$VM_DISK" \n    || die "refusing to boot $VM_DISK read-write: another image overlays it"
 
 OVMF=$(detect_ovmf) || die "no 4MB OVMF code image found; set OVMF_CODE in vgpu.conf"
 BDF=$(detect_gpu_bdf) || exit 1

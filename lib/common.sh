@@ -204,17 +204,31 @@ helper_ko() {
 detect_ovmf() {
     [ -n "$OVMF_CODE" ] && { [ -r "$OVMF_CODE" ] || die "OVMF_CODE=$OVMF_CODE unreadable"; echo "$OVMF_CODE"; return; }
     local c
+    # Prefer the builds whose name states the 4MB layout. Note "4m" describes the
+    # CODE+VARS pairing, not the code file's byte size - OVMF_CODE.4m.fd is about
+    # 3.6 MB and OVMF_VARS.4m.fd about 528 KB - so do not test the size. An
+    # earlier version of this function required exactly 4194304 bytes and
+    # therefore rejected every valid image.
     for c in \
         /usr/share/edk2/x64/OVMF_CODE.4m.fd \
         /usr/share/edk2-ovmf/x64/OVMF_CODE.4m.fd \
         /usr/share/OVMF/OVMF_CODE_4M.fd \
         /usr/share/OVMF/OVMF_CODE.4m.fd \
-        /usr/share/qemu/ovmf-x86_64-code.bin \
-        /usr/share/edk2/ovmf/OVMF_CODE.fd
+        /usr/share/edk2/ovmf/OVMF_CODE.4m.fd
     do
-        # A 2MB CODE image with a 4MB VARS file does not boot, and some distributions
-        # still ship the 2MB one under a generic name.
-        [ -r "$c" ] && [ "$(stat -c %s "$c" 2>/dev/null)" = "4194304" ] && { echo "$c"; return; }
+        [ -r "$c" ] && { echo "$c"; return; }
+    done
+    # Generic names are usually the 2MB layout, which will not boot against a 4MB
+    # OVMF_VARS.fd. Usable, but say so rather than picking it silently.
+    for c in \
+        /usr/share/qemu/ovmf-x86_64-code.bin \
+        /usr/share/edk2/ovmf/OVMF_CODE.fd \
+        /usr/share/OVMF/OVMF_CODE.fd
+    do
+        if [ -r "$c" ]; then
+            warn "using $c, which does not name a 4MB layout - check it pairs with your OVMF_VARS.fd"
+            echo "$c"; return
+        fi
     done
     return 1
 }
@@ -273,4 +287,46 @@ safe_to_reset() {
     [ -z "$drv" ] && return 0
     warn "$1 is still bound to driver '$drv'"
     return 1
+}
+
+# Booting a qcow2 read-write while another image uses it as a backing file
+# silently invalidates that overlay and corrupts its guest filesystem. QEMU's
+# locking prevents both being open at once, but nothing prevents doing it
+# sequentially, which is the easy mistake to make.
+#
+# Checks every qcow2 beside $1 and fails if any of them backs onto it.
+assert_not_a_backing_file() {
+    local disk="$1" other bf base
+    command -v qemu-img >/dev/null || return 0
+    # Scan every guest under VM_BASE, not just the sibling files: a chain can
+    # and does cross directories.
+    # Resolve the base first. VM_BASE is commonly a symlink (/var/lib/vgpu-vm
+    # pointing at a data filesystem), and find does not descend a symlinked
+    # starting point, so an unresolved path silently scans nothing and every
+    # disk comes back "safe".
+    base=$(readlink -f "${VM_BASE:-$(dirname "$(dirname "$disk")")}" 2>/dev/null)
+    [ -d "$base" ] || return 0
+    for other in $(find "$base" -maxdepth 2 -name '*.qcow2' 2>/dev/null); do
+        [ -f "$other" ] || continue
+        [ "$other" = "$disk" ] && continue
+        bf=$(qemu-img info -U --output=json "$other" 2>/dev/null \
+             | sed -n 's/.*"backing-filename": "\([^"]*\)".*/\1/p' | head -1)
+        [ -n "$bf" ] || continue
+        if [ "$(readlink -f "$bf" 2>/dev/null)" = "$(readlink -f "$disk" 2>/dev/null)" ]; then
+            warn "$(basename "$other") uses $(basename "$disk") as its backing file."
+            warn "Booting the backing file read-write would invalidate that overlay."
+            return 1
+        fi
+    done
+    return 0
+}
+
+# One OVMF_VARS.fd per guest. Two guests sharing one clobber each other's boot
+# entries, and the symptom is a guest that stops booting for no visible reason.
+assert_own_nvram() {
+    local vars="$1" n
+    [ -f "$vars" ] || { warn "$vars does not exist"; return 1; }
+    n=$(stat -c %h "$vars" 2>/dev/null)
+    [ "${n:-1}" -gt 1 ] && warn "$vars has $n hard links - is it shared with another guest?"
+    return 0
 }

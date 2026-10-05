@@ -1,4 +1,7 @@
 #!/bin/bash
+# DANGER: this boots win-key0.qcow2 READ-WRITE. If any overlay uses it as a
+# backing file, booting it here silently invalidates that overlay. Read
+# as-run/DANGER-run-key0.md before running this. Prefer startguest.sh.
 # Canonical launcher for the working Windows vGPU guest.
 # DO NOT add or remove -device entries: changing the PCI layout makes Windows create a new
 # driver instance under a new {4d36e968-...}\NNNN class subkey, which strands the guest
