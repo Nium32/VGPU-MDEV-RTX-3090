@@ -81,7 +81,6 @@ kmod/*                 read-only diagnostic probes used during the investigation
 notes/                 what was tried and what failed
 COMPATIBILITY.md       what works, what fails, what nobody has tried - please add rows
 CONTRIBUTING.md        what is most wanted, and the traps this codebase hit
-SECURITY.md            network defaults, what is excluded, operational hazards
 Makefile               make modules / make check / make install
 ```
 
