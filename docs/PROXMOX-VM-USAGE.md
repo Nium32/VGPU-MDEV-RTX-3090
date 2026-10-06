@@ -116,7 +116,7 @@ qm set $VMID --sata0    vgpussd:$VMID/vm-$VMID-disk-0.qcow2,cache=writeback,disc
 qm set $VMID --efidisk0 vgpussd:$VMID/vm-$VMID-disk-1.raw,efitype=4m,pre-enrolled-keys=0
 qm set $VMID --boot     order=sata0
 qm set $VMID --hostpci0 <gpu-bdf>,mdev=nvidia-664,pcie=1
-qm set $VMID --smbios1  uuid=00000000-0000-0000-0000-0000000001$VMID
+qm set $VMID --smbios1  uuid=$(printf "00000000-0000-0000-0000-%012d" "$VMID")
 ```
 
 ### Why each non-default setting
@@ -220,7 +220,7 @@ qm set $VMID --sata0    vgpussd:$VMID/vm-$VMID-disk-0.qcow2,cache=writeback,disc
 qm set $VMID --efidisk0 vgpussd:$VMID/vm-$VMID-disk-1.raw,efitype=4m,pre-enrolled-keys=0
 qm set $VMID --boot     order=sata0
 qm set $VMID --hostpci0 <gpu-bdf>,mdev=nvidia-664,pcie=1
-qm set $VMID --smbios1  uuid=00000000-0000-0000-0000-0000000001$VMID
+qm set $VMID --smbios1  uuid=$(printf "00000000-0000-0000-0000-%012d" "$VMID")
 
 # 3. Throwaway boot so Windows allocates the subkey. Expect Code 43 here.
 qm start $VMID
@@ -244,7 +244,7 @@ Right-click the VM → **Clone** works, and is genuinely two clicks, with three 
   multi-tens-of-GB copy, where the overlay above is instant. For a linked clone Proxmox requires
   the source to be converted to a template first, and a template can no longer be started.
 * The clone inherits `hostpci0`, but **not** a correct UUID. Fix it afterwards:
-  `qm set <newid> --smbios1 uuid=00000000-0000-0000-0000-0000000001<newid>`
+  `qm set <newid> --smbios1 uuid=$(printf "00000000-0000-0000-0000-%012d" <newid>)`
 * The clone still needs the throwaway boot and the registry fix from step 3–4.
 
 ### Limits
@@ -256,12 +256,78 @@ before starting another:
 cat /sys/bus/pci/devices/<gpu-bdf>/mdev_supported_types/nvidia-664/available_instances
 ```
 
-Starting a fourth fails at mdev creation. Host RAM and cores are the other ceiling — the reference
-machine ran two 12 GB / 8-core guests on 46 GB and 16 threads without pressure.
+Starting a fourth fails at mdev creation.
+
+**One profile type per physical GPU.** vGPU does not mix profiles on one card, and the sysfs
+numbers show it directly: with two `nvidia-664` (8Q) guests up, every other profile on the card
+reads `available_instances = 0`, including the ones that were non-zero before the first guest
+started. So the choice of profile is made once, for all guests on that GPU, and the 8Q profile's
+three instances are the ceiling. Picking `nvidia-665` (12Q) instead would cap you at two.
+
+`nvidia-672` (`RTXA5000-8A`) also shows instances, because the A-series profile has the same
+framebuffer size. Do not use it: it was measured here returning `cuCtxCreate rc=801
+NOT_SUPPORTED` with no TSG ever scheduled. The Q profile is the one that works.
+
+Host RAM and cores are the other ceiling. The reference machine ran two 12 GB / 8-core guests on
+46 GB and 16 threads without pressure; at that point 26 GB was committed and 20 GB still
+allocatable, so a third 12 GB guest fits but leaves little headroom. vCPUs oversubscribe fine —
+three 8-core guests on 16 threads is 1.5×, which is normal for desktop workloads.
 
 ---
 
-## 5. Proxmox-specific rough edges
+## 5. Connecting to the guests
+
+On an isolated bridge the guests are deliberately unreachable from the LAN, so there are two
+routes in. Both were tested.
+
+### The Proxmox console — nothing to set up
+
+Web UI → the VM → **Console**. This is noVNC against QEMU's emulated VGA.
+
+It always works, which makes it the right tool for installing, for the throwaway boot in section 4,
+and for anything that happens before Windows is up. What it is *not* is the vGPU's output — once
+the NVIDIA driver takes over as the primary display, the accelerated desktop goes to the vGPU and
+this console keeps showing the emulated head. A visible symptom is desktop icons disappearing from
+the console view while the taskbar clock keeps ticking.
+
+### RDP over an SSH tunnel — this is the one that uses the GPU
+
+RDP renders and encodes on the vGPU, so this is how you actually get the accelerated desktop.
+`AllowTcpForwarding` is on by default, so no host configuration is needed:
+
+```bash
+ssh -N -L 13389:10.10.10.54:3389 -L 13390:10.10.10.81:3389 <user>@<host-ip>
+```
+
+Then point any RDP client at `127.0.0.1:13389` for the first guest and `127.0.0.1:13390` for the
+second. On Windows that is `mstsc /v:127.0.0.1:13389`. Nothing is exposed to the LAN: the listening
+socket is on your own machine, and `GatewayPorts` is `no`.
+
+Credentials are the guest's own Windows account. Port 3389 answering means RDP is already enabled
+in the guest.
+
+### Stable addresses
+
+Guest addresses come from DHCP and will move. Pin them by MAC so the tunnel command keeps working:
+
+```
+# in the dnsmasq invocation from section 1
+--dhcp-host=<guest-mac>,10.10.10.54
+```
+
+Take the MAC from `qm config <vmid>`, the `net0:` line.
+
+### If you want them on the LAN instead
+
+Replace the isolated bridge with a normal bridged setup and the guests become ordinary machines on
+your network, reachable directly by RDP. That is the conventional Proxmox arrangement and it is
+fine — it just means anything on the LAN can reach the guests, and converting the interface you
+administer the host over carries the lockout risk described in section 1. Do it from the console,
+not over SSH.
+
+---
+
+## 6. Proxmox-specific rough edges
 
 **Migration errors on every stop.** Proxmox's QEMU has VFIO migration support compiled in, and the
 NVIDIA vGPU vfio driver does not implement it. Every `qm stop` logs:
@@ -303,7 +369,7 @@ powercfg /h off
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Symptom | Cause |
 |---|---|

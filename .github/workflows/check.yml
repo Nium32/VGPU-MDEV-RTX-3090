@@ -56,6 +56,9 @@ jobs:
           # LAN address such as 192.168.1.4 is still rejected.
           allow='0\.0\.0\.0|127\.0\.0\.1|127\.0\.1\.1|10\.10\.10\.[0-9]+|1\.1\.1\.1|8\.8\.8\.8'
           allow="$allow|4d36e968-e325-11ce-bfc1-08002be10318|94\.02\.42\.40|ROOT-FS-UUID"
+          # Proxmox derives the mdev UUID from the VM ID, so 00000000-0000-0000-0000-000000000100
+          # is VM 100 on every machine that ever runs this. Not identifying.
+          allow="$allow|00000000-0000-0000-0000-[0-9]{12}"
           if grep -rInE "$pat" --include='*.sh' --include='*.md' --include='*.example' . \
              | grep -vE "$allow"; then
             echo "found an IP address or filesystem UUID that should be a placeholder"
