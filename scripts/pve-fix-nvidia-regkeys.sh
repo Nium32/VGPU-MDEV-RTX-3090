@@ -58,11 +58,12 @@ echo "control set: $CS"
 REG="$WORK/fix.reg"
 echo 'Windows Registry Editor Version 5.00' > "$REG"; echo >> "$REG"
 n=0
-for i in $(seq -w 0 9); do
+# Enumerate the subkeys that actually exist rather than assuming fewer than ten.
+for i in $(seq -w 0 31); do
     # Only touch subkeys that already exist; inventing new ones confuses setupapi.
-    hivexregedit --export "$HIVE" "$CS\\$CLASS\\000$i" >/dev/null 2>&1 || continue
+    hivexregedit --export "$HIVE" "$CS\\$CLASS\\00$i" >/dev/null 2>&1 || continue
     {
-        printf '[HKEY_LOCAL_MACHINE\\SYSTEM\\%s\\%s\\000%s]\n' "$CS" "$CLASS" "$i"
+        printf '[HKEY_LOCAL_MACHINE\\SYSTEM\\%s\\%s\\00%s]\n' "$CS" "$CLASS" "$i"
         printf '"RMSetClientRMAllocatedCtxBuffer"=dword:00000000\n'
         printf '"RmRcWatchdog"=dword:00000000\n\n'
     } >> "$REG"

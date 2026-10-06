@@ -459,9 +459,12 @@ NVIDIA vGPU vfio driver does not implement it. Every `qm stop` logs:
 [nvidia-vgpu-vfio] <uuid>: Failed to configure vgpu device state -5
 ```
 
-The guest stops correctly and the next start is clean. The practical consequence is that live
-migration and RAM-inclusive snapshots are not available for these VMs — which was never going to
-work on a single consumer card anyway.
+The guest stops correctly. The practical consequence is that live migration and RAM-inclusive
+snapshots are not available for these VMs — which was never going to work on a single consumer
+card anyway. Disk-only snapshots do work; see the section below.
+
+**The next start, however, is not clean — see "The teardown wedge" below.** An earlier version of
+this document claimed it was. It is not.
 
 **The mdev is not always reaped.** Starting a VM whose previous mdev survived prints
 `mdev instance '…' already existed, using it.` That is harmless. If a start fails with no
@@ -469,6 +472,68 @@ instances available, check `ls /sys/bus/mdev/devices` and remove the stale one:
 
 ```bash
 echo 1 | sudo tee /sys/bus/mdev/devices/<uuid>/remove
+```
+
+Reaping a stale mdev does **not** clear the teardown wedge. If the start still fails afterwards,
+the stack has to be reloaded.
+
+### The teardown wedge — unsolved
+
+Once any guest has run and been torn down, **no guest will start** until the NVIDIA kernel modules
+are reloaded:
+
+```
+start failed: QEMU exited with code 1
+[nvidia-vgpu-vfio] <uuid>: start failed. status: 0x1
+Init frame copy engine: syncing...
+Timed out (6001 ms) trying to sync
+init_device_instance failed for inst 0 with error 7 (init frame copy engine)
+```
+
+It is not about running two guests at once: it reproduces with **nothing running at all**. Guests
+started together after a fresh module load run side by side indefinitely; it is stopping one and
+starting it again that fails.
+
+Eliminated by test, so nobody repeats them:
+
+| Suspected cause | Result |
+|---|---|
+| A second concurrent instance | Reproduces with both guests stopped |
+| A leaked `vgpu` plugin child holding resources | Children exit cleanly; one parent, no orphan |
+| Userspace plugin state | `systemctl restart nvidia-vgpu-mgr` does not clear it |
+| The FIX 1 `zfmulti` kprobe | Removing the module does not help |
+| `pte_blit_enabled=0` | Applied correctly via udev, no effect |
+| `frame_copy_engine=0` | 1 restart in 4 |
+| `fb_scrubbing_enabled=0` | 0 restarts in 4 — worse |
+| `bar1_length=64` | Swapped one error for another; restarts still failed |
+
+The fault is in `nvidia.ko`'s device state, and no mdev parameter reaches it. The workaround is a
+full reload, which takes every guest down with it:
+
+```bash
+vgpu fix        # or: scripts/vgpu-recover.sh
+```
+
+**Practical model: treat the guests as one set that starts and stops together.** Rebooting from
+*inside* Windows avoids the problem entirely — the VM never releases the mdev, so the wedge never
+triggers. It is only `qm stop` followed by `qm start` that forces a reload.
+
+### Snapshots
+
+`qm snapshot` refuses with `snapshot feature is not available` while `efidisk0` is `raw`, because
+raw images have no internal snapshot support. Convert it once, with the guest stopped:
+
+```bash
+qemu-img convert -f raw -O qcow2 vm-<id>-disk-1.raw vm-<id>-disk-1.qcow2
+qm set <id> --efidisk0 <storage>:<id>/vm-<id>-disk-1.qcow2,efitype=4m,pre-enrolled-keys=0
+```
+
+After that, snapshots work on a running guest (disk only, no RAM — `hostpci0` prevents that):
+
+```bash
+vgpu save known-good        # snapshots every guest
+vgpu saves                  # list them
+vgpu restore known-good     # roll every guest back
 ```
 
 **`nvidia-smi vgpu` on the host reports "No supported devices in vGPU mode."** Expected. The spoof

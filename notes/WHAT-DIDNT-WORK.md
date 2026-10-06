@@ -148,6 +148,34 @@ question. These were all stated as findings at some point and later had to be re
 There were at least six successive confident "ROOT CAUSE" claims before the actual fix. Several
 were measured correctly and were still wrong about what mattered.
 
+## The teardown wedge — eliminated causes
+
+Once any guest has run and been stopped, no guest starts until the NVIDIA kernel modules are
+reloaded (`Timed out (6001 ms) trying to sync`, `init_device_instance failed for inst 0 with
+error 7 (init frame copy engine)`, `start failed. status: 0x1`). Still unsolved. These were each
+tested and ruled out, so nobody has to repeat them:
+
+- **"It is a second concurrent instance."** No. It reproduces with *both* guests stopped and
+  nothing holding the GPU. Guests started together after a fresh module load run side by side fine.
+- **"A `vgpu` plugin child is leaking."** No. Children exit on guest stop; one parent process
+  remains, no orphan, and the mdev is removed.
+- **"It is userspace plugin state."** No. `systemctl restart nvidia-vgpu-mgr` does not clear it.
+- **"The FIX 1 `zfmulti` kprobe interferes with re-init."** No. Unloading the module does not help.
+- **`pte_blit_enabled=0`** — applied correctly through a udev rule, verified in
+  `/sys/bus/mdev/devices/<uuid>/nvidia/vgpu_params`, no effect.
+- **`frame_copy_engine=0`** — one restart succeeded, then 1 of 4.
+- **`fb_scrubbing_enabled=0`** — 0 of 4, worse than leaving it alone, despite the teardown-time
+  error `Wait for scrubbing completion failed with error: 0x7` pointing straight at it.
+- **`bar1_length=64`** — this one came from a wrong premise. The reasoning was that the card's
+  256 MiB BAR1 is consumed whole by the first guest; the override did silence the
+  `pte blit resource initialization failed with error 7` messages, but restarts still failed, and
+  two guests had been running concurrently on the stock setting both before and after. Reverted.
+
+Two notes on method. The `pte blit` errors are a *symptom* of the wedge, not its cause — chasing
+them produced a plausible-looking BAR1 theory that the rig had already disproved. And the only
+experiment that actually narrowed anything was stopping every guest and showing the failure still
+happened; everything before that was reasoning about concurrency that was never involved.
+
 ## One external check
 
 A survey of published work found no implementation of this. The well-known unlock projects

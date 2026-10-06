@@ -1,0 +1,135 @@
+#!/bin/bash
+# vgpu - one command for the whole rig.
+#
+#   vgpu status      is it working?
+#   vgpu start       turn the VMs on
+#   vgpu stop        turn the VMs off
+#   vgpu fix         it broke - fix it (reloads the stack, restarts the VMs)
+#   vgpu new 102     make another VM
+#   vgpu ip          what addresses do I connect to?
+#   vgpu log         what went wrong?
+#
+# Everything it does is also doable by hand; this exists so nobody has to remember
+# which of eight scripts to run or in what order.
+set -uo pipefail
+
+D=${VGPU_DIR:-/srv/vgpu}
+BDF=${GPU_BDF:-$(lspci -Dn -d 10de: 2>/dev/null | awk '$2 ~ /^0300/ {print $1; exit}')}
+TYPE=${MDEV_TYPE:-nvidia-664}
+
+if [ "$(id -u)" -ne 0 ]; then exec sudo -E "$0" "$@"; fi
+
+guests() {
+    grep -ls '^hostpci0:.*mdev=' /etc/pve/qemu-server/*.conf 2>/dev/null \
+        | xargs -r -n1 basename | sed 's/\.conf$//' | sort -n
+}
+
+guest_ip() {
+    local mac
+    mac=$(sed -n 's/^net0: .*=\([0-9A-Fa-f:]*\),bridge.*/\1/p' "/etc/pve/qemu-server/$1.conf" 2>/dev/null | head -1)
+    [ -n "$mac" ] || return
+    ip neigh | grep -i "$mac" | grep -v FAILED | awk '{print $1}' | head -1
+}
+
+cmd_status() {
+    echo "GPU"
+    local avail
+    avail=$(cat "/sys/bus/pci/devices/$BDF/mdev_supported_types/$TYPE/available_instances" 2>/dev/null || echo '?')
+    echo "   free slots for VMs : $avail"
+    echo "   errors (Xid)       : $(dmesg | grep -ci xid || true)   <- should be 0"
+    echo
+    echo "LICENCE SERVER"
+    if docker ps --filter name=fastapi-dls --format '{{.Status}}' 2>/dev/null | grep -q Up; then
+        echo "   running            : yes"
+    else
+        echo "   running            : NO  <- run: vgpu fix"
+    fi
+    echo
+    echo "VMs"
+    local v st ip
+    for v in $(guests); do
+        st=$(qm status "$v" 2>/dev/null | cut -d' ' -f2)
+        ip=$(guest_ip "$v")
+        printf '   VM %-5s %-9s %s\n' "$v" "$st" "${ip:-no address yet}"
+    done
+}
+
+cmd_start() {
+    local v
+    for v in $(guests); do
+        if [ "$(qm status "$v" 2>/dev/null)" = "status: running" ]; then
+            echo "   VM $v already running"
+        else
+            echo "   starting VM $v"
+            qm start "$v" >/dev/null 2>&1
+            sleep 20
+        fi
+    done
+    echo
+    echo "If a VM did not start, run:  vgpu fix"
+}
+
+cmd_stop() {
+    local v
+    for v in $(guests); do
+        echo "   stopping VM $v"
+        qm shutdown "$v" --timeout 90 >/dev/null 2>&1
+    done
+    for v in $(guests); do
+        for _i in $(seq 1 50); do
+            [ "$(qm status "$v" 2>/dev/null)" = "status: stopped" ] && break
+            sleep 2
+        done
+        if [ "$(qm status "$v" 2>/dev/null)" != "status: stopped" ]; then
+            qm stop "$v" >/dev/null 2>&1
+        fi
+    done
+    echo "   all stopped"
+}
+
+cmd_fix() {
+    echo "Fixing. This stops every VM, resets the graphics card and starts them again."
+    echo "Takes about two minutes. Do not interrupt it."
+    echo
+    "$D/vgpu-recover.sh"
+    echo
+    echo "Now check it:  vgpu status"
+}
+
+cmd_new() {
+    local id=${1:-}
+    if [ -z "$id" ]; then echo "Which number? Example:  vgpu new 102" >&2; exit 1; fi
+    "$D/pve-newvm.sh" "$id"
+}
+
+cmd_ip() {
+    local v ip
+    for v in $(guests); do
+        ip=$(guest_ip "$v")
+        [ -n "$ip" ] || continue
+        echo "VM $v"
+        echo "   Remote desktop (Moonlight) : $ip"
+        echo "   Settings page in a browser : https://$ip:47990"
+    done
+}
+
+cmd_log() {
+    echo "== recent GPU errors =="
+    dmesg | grep -i xid | tail -5 || echo "   none"
+    echo "== recent stack errors =="
+    journalctl -u nvidia-vgpu-mgr --since '-20min' --no-pager 2>/dev/null \
+        | grep -iE 'error|fail' | tail -10 | sed 's/.*vgpu-mgr\[[0-9]*\]: /   /' || echo "   none"
+}
+
+case "${1:-help}" in
+    status) cmd_status ;;
+    start)  cmd_start ;;
+    stop)   cmd_stop ;;
+    fix)    cmd_fix ;;
+    new)    shift; cmd_new "$@" ;;
+    ip)     cmd_ip ;;
+    log)    cmd_log ;;
+    *)
+        sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'
+        ;;
+esac

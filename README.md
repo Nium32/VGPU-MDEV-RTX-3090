@@ -68,13 +68,26 @@ including what was ruled out as the cause, is in [docs/KERNEL-REQUIREMENTS.md](d
 docs/TUTORIAL.md        the full walkthrough - read this first
 docs/BUILDING-ON-DEBIAN.md  Debian and Ubuntu: split headers, and the board mapping
 docs/PROXMOX.md         Proxmox on a kernel that works, and pinning it there
-docs/PROXMOX-VM-USAGE.md  running the guest as a Proxmox VM, and adding more of them
+docs/PROXMOX-VM-USAGE.md  running the guest as a Proxmox VM, adding more, snapshots,
+                       and the teardown wedge that makes a stopped guest unstartable
+docs/LICENSING.md      self-hosted FastAPI-DLS, and the clock skew that silently breaks it
 vgpu.conf.example      every tunable, with defaults and auto-detection
 lib/common.sh          config loading, hardware discovery, sanity checks
+scripts/vgpu           one command for the whole rig: status/start/stop/fix/new/save/ip/log
 scripts/preflight.sh   report what this machine looks like; changes nothing
 scripts/bringup.sh     load the stack in the order that works
 scripts/startguest.sh  create an mdev and boot a guest on it
 scripts/hardreset.sh   full teardown, including the vfio core
+scripts/vgpu-recover.sh  clear the teardown wedge: stop all, reload the stack, start again
+scripts/vgpu-provision.sh  install driver, agent, Sunshine, display driver and licence
+                       token into a guest; you supply the driver, it does the rest
+scripts/vgpu-stress.sh   regression harness: recover cycles asserting licence, Xid and
+                       pte-blit all stay clean
+scripts/vgpu-guest-timesync.sh  keep guest clocks matched to the host - licensing breaks
+                       silently when they drift
+scripts/gexec.sh       run a PowerShell snippet in a guest through the QEMU guest agent
+scripts/pve-vgpu-sunshine-map.sh  one LAN address per guest; Moonlight pins its server
+                       certificate per IP, so two guests behind one address collide
 scripts/pve-newvm.sh   create another vGPU guest end to end, including the throwaway boot
 scripts/pve-vgpu-portmap.sh  publish each running guest's RDP port on the LAN
 scripts/pve-fix-rdp-wddm.sh  set/unset fEnableWddmDriver offline (-r reverts); did NOT fix
@@ -113,8 +126,13 @@ Internet Archive is a genuinely good place to look - older vGPU and GRID install
 mirrored there. Check the version matches what you need exactly, because the kprobe offset is tied
 to one driver build.
 
-**No licensing bypass.** Unlocking the device gating is a separate thing from vGPU licensing.
-Guests still want a license or they degrade after a grace period.
+**Licensing is separate, and it bites hard.** Unlocking the device gating has nothing to do with
+vGPU licensing. Once the grace period expires a guest reports `Unlicensed (Restricted)` and the
+GPU is throttled — measured here as a game dropping from 60 fps to 15 with the host GPU at 1–7 %
+utilisation and no error anywhere. It reads exactly like a driver fault and is not one. Check
+`nvidia-smi -q | grep 'License Status'` in the guest **first** when performance collapses for no
+visible reason. [docs/LICENSING.md](docs/LICENSING.md) covers running a self-hosted licence server
+and the guest clock skew that silently prevents it from issuing a lease.
 
 **Not a supported configuration.** Every driver and kernel update can break it, and the kprobe
 is tied to one driver build. Expect to re-derive things.
@@ -190,7 +208,14 @@ at one of them right now, the linked section is where the answer is.
 | guest shows **Code 43** in Device Manager with a vGPU attached | the two guest registry keys are missing, or are in the wrong class subkey. [Tutorial Part 9](docs/TUTORIAL.md). If the guest only started doing this after you moved it to Proxmox or changed its PCI slot, the keys are on the *old* subkey: [PROXMOX-VM-USAGE.md](docs/PROXMOX-VM-USAGE.md) |
 | `Xid 44 ... Ch 00000008, intr 00000000` every run | `RMSetClientRMAllocatedCtxBuffer` is unset, so the guest promotes its own context buffers. [Tutorial Part 9](docs/TUTORIAL.md) |
 | guest boots, GPU present, no errors anywhere, and nothing renders | an interrupt handler disabled the graphics runlist and nothing re-enabled it. This is the core finding. [Tutorial Part 5](docs/TUTORIAL.md) |
-| `init_device_instance` fails with **error 7** | no PCI function-level reset after a by-hand driver reload |
+| `init_device_instance` fails with **error 7** | more than one cause. After a by-hand driver reload, no PCI function-level reset. After a guest has been stopped, the teardown wedge — see the next row |
+| `Timed out (6001 ms) trying to sync` / `init_device_instance failed ... (init frame copy engine)` / `start failed. status: 0x1` | the teardown wedge: once any guest has been stopped, none will start until the modules are reloaded. `vgpu fix`. Unsolved; the eliminated causes are listed in [PROXMOX-VM-USAGE.md](docs/PROXMOX-VM-USAGE.md) |
+| `Unlicensed (Restricted)` in `nvidia-smi -q`, and everything is suddenly slow | the licence grace period expired and the GPU is throttled. [LICENSING.md](docs/LICENSING.md) |
+| licence client loops on `POST /auth/v1/origin` and never gets a lease | the guest clock disagrees with the licence server; the tokens are time-signed. [LICENSING.md](docs/LICENSING.md) |
+| `Failed to find the hardcoded NLS certificates!` from `gridd-unlock-patcher` | the patcher does not know this driver build — and on 539.72 it is not needed at all. [LICENSING.md](docs/LICENSING.md) |
+| `Xid 31 ... MMU Fault: ENGINE NVENC0` | the video encoder faulting on HEVC yuv444 10-bit. Constrain the encoder to H.264 (`hevc_mode = 1`, `av1_mode = 1`) |
+| `NvEnc: encode wait timeout` repeating, with the stream hitching | something in the guest is hammering the GPU's control path. FurMark's GUI reproduces it; ordinary games do not |
+| `snapshot feature is not available` | `efidisk0` is `raw`, which cannot snapshot. Convert it to qcow2. [PROXMOX-VM-USAGE.md](docs/PROXMOX-VM-USAGE.md) |
 | `insmod: Unknown symbol in module` on `nvidia-vgpu-vfio.ko` | `mdev`, `vfio`, `vfio_pci_core` or `irqbypass` is not loaded |
 | `error getting device from group N ... not already in use` | a `SIGKILL`ed QEMU wedged the IOMMU group; the vfio core modules must come out |
 | `cuCtxCreate` returns **801** NOT_SUPPORTED | you are on an `A` profile. Use a `Q` profile. |
