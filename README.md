@@ -126,8 +126,7 @@ No NVIDIA code, driver installer or license is redistributed in this repository.
 
 ## What has and has not been tested
 
-Be clear about this before trusting the code, because the documentation is better verified than the
-scripts are.
+Be clear about this before trusting the code.
 
 **Verified by running it on the hardware:**
 
@@ -141,20 +140,37 @@ scripts are.
 - Everything in `scripts/as-run/` - that is the exact text that produced every measurement quoted
   in the documentation.
 
-**Generalised from working scripts but NOT re-tested as a full cycle:**
+- **The full cycle**, on a second machine (Debian 12 / Proxmox, kernel 6.1.0-53), from a fresh
+  `git clone` rather than the working tree:
+  `hardreset.sh` → `bringup.sh` → `startguest.sh` → clean guest shutdown. `hardreset` discovered
+  the GPU and IOMMU group, unloaded everything on the first attempt and confirmed `/dev/vfio/15`
+  destroyed. `bringup` returned 0 with 18 profiles, `nvidia-664 avail=3`, `xid 0`. `startguest`
+  resolved the profile by name, created the mdev, bound VNC to loopback and had RDP up in 40
+  seconds. On shutdown the wrapper released the mdev — `available_instances` went back to 3 —
+  which is the behaviour that matters, because QEMU aborts during vfio teardown and a
+  hand-rolled launcher leaks an mdev every run.
 
-`scripts/bringup.sh`, `scripts/startguest.sh` and `scripts/hardreset.sh`. They are rewrites of the
-as-run versions with the machine-specific values replaced by runtime discovery. The logic and the
-ordering match, the discovery layer is tested, and they pass `shellcheck -S warning` - but a full
-tear-down-and-bring-up cycle has not been run with them, because doing that means taking down a
-working guest.
+**What that cycle found, which reading the code had not:**
 
-That matters. Until recently `bringup.sh` carried a two-character escape where a line continuation
-was meant, so `systemctl is-active` received an extra argument and the script died on every single
-run. `bash -n` accepted it happily; `shellcheck` caught it. CI now rejects that pattern, but assume
-there may be another like it and read the script before you run it as root.
+Three defects, all in scripts that passed `bash -n` and `shellcheck -S warning`:
 
-If you want the proven-exact path, use `scripts/as-run/` and edit the paths by hand.
+- `bringup.sh` carried a two-character escape where a line continuation was meant, so
+  `systemctl is-active` received an extra argument and the script died on every run.
+- `bound_driver()` used `readlink -f` on the PCI `driver` symlink. That call succeeds when the
+  final component is missing and returns the path itself, so with **no** driver bound it reported
+  the literal string `driver` and `bringup.sh` refused to reset a free device. The identical bug
+  had already been found and fixed in `gpu_iommu_group`, with a comment explaining it, and was not
+  carried across to the function added later in the same file.
+- The `nvidia-vgpud` check used `systemctl is-active`. That unit is `Type=oneshot`, so it reports
+  `inactive` after a **successful** run — the check failed every time it worked. The oneshot
+  behaviour was already written down in two documents in this repository.
+
+The pattern is worth stating plainly: every one of those was a fact the project already knew,
+written down, and then not applied to code added in the same pass. Static checking caught none of
+them. Running the thing caught all three.
+
+If you want the proven-exact path, `scripts/as-run/` is still the text that produced the original
+measurements.
 
 ## If you got here searching for an error
 
