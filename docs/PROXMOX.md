@@ -82,6 +82,51 @@ xid                  0
 
 The vGPU stack behaves exactly as it does on plain Debian. Proxmox changes nothing about it.
 
+## Verified under Proxmox
+
+The guest was booted on the Proxmox host and the in-guest test read its result back:
+
+```
+==== CUDA test 2026-10-06 04:57:19 user=Test ====
+device='NVIDIA RTXA5000-8Q' computeCapability=8.6
+COPY-PASS (4 MiB roundtrip verified)
+cuLaunchKernel rc=0 grid=4097 block=256
+verified 1052 sampled elements
+COMPUTE-PASS (every sampled element matches the kernel output)
+CUDA-ALL-PASS
+```
+
+`pteblit=0`, `errors=0`, `Xid 0` for the whole boot. The result file was checked against a marker
+stamped before the trigger, so it is from that run.
+
+## QEMU aborts on teardown and leaks the mdev
+
+Worth knowing because it looks alarming and is not:
+
+```
+qemu-system-x86_64: ../util/qemu-thread-posix.c:92:
+    qemu_mutex_lock_impl: Assertion `mutex->initialized' failed.
+```
+
+Seen on `pve-qemu-kvm 9.2.0-8` after `system_powerdown`. It fires during teardown, **after** the
+guest has shut down and flushed - the result file was written and the NTFS filesystem mounted
+clean afterwards. The guest is fine.
+
+The consequence is real though: QEMU dies before releasing the mdev, so `available_instances`
+drops by one every run and the profile is exhausted after three. Reap orphans before creating a
+new one, skipping any still referenced by a live process:
+
+```bash
+for m in /sys/bus/mdev/devices/*; do
+    u=${m##*/}
+    grep -lqs "$u" /proc/[0-9]*/cmdline 2>/dev/null && continue
+    timeout 25 sh -c "echo 1 > /sys/bus/mdev/devices/$u/remove"
+done
+```
+
+`scripts/startguest.sh` already handles this: QEMU runs inside a wrapper subshell that releases
+the mdev when QEMU exits, whatever the exit status. A hand-rolled launcher will not.
+
 ## What Proxmox does and does not give you here
 
 It gives you the web UI, the storage and backup layer, and the VM lifecycle tooling.
