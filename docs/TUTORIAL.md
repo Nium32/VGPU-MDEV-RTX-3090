@@ -778,6 +778,7 @@ Read this section before experimenting.
 | set `nvidia_drm modeset=1` | creates a `card0` with zero connectors, and wedges as above |
 | write to `/dev/fb0` | the EFI framebuffer is mapped inside BAR1, the same aperture the vGPU stack uses. A 3 MB write there silently corrupted a running guest. |
 | `kill -9` a QEMU holding an mdev | leaves the IOMMU group wedged. Every later QEMU fails with `error getting device from group N` even though nothing holds the device. Needs `hardreset.sh`. |
+| send `system_powerdown` to a guest that is still booting | Windows is not ready for ACPI shutdown and silently ignores it. The guest just keeps running. Wait until RDP answers before sending it. |
 | loop the BAR0 PRAMIN window while RM is live | wedged the host hard enough to need a physical power cycle. Set the window once per 64 KB, never per entry. |
 | `pacman -Syu` without pinning the kernel | moves you off a working kernel onto a broken one |
 | use any `RMInstLoc` value | `65536` loads and leaves the mdev unusable. `131072` is **untested** despite older notes claiming otherwise. |
@@ -801,7 +802,11 @@ sudo ./scripts/startguest.sh
 # get in
 ssh -L 3390:127.0.0.1:3390 user@host     # then RDP to 127.0.0.1:3390
 
-# stop the guest cleanly - do NOT kill -9
+# stop the guest cleanly - do NOT kill -9.
+# startguest.sh runs qemu inside a wrapper that releases the mdev when it
+# exits, which matters because qemu aborts during vfio teardown rather than
+# exiting cleanly. Without that wrapper you leak an mdev on every run and the
+# 8Q profile is exhausted after three.
 printf "system_powerdown\n" | sudo socat - UNIX-CONNECT:/var/lib/vgpu-vm/winguest/monitor.sock
 
 # recover from a wedged group
