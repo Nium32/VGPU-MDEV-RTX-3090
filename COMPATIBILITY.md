@@ -95,7 +95,7 @@ chipset is sufficient.
 | Arch | **untried** | should be identical |
 | Debian 12 bookworm | **yes — CUDA-ALL-PASS** | kernel 6.1.0-53-amd64, compute verified by readback. Needs the split-header fix and `/etc/vgpu_unlock/config.toml`; see [BUILDING-ON-DEBIAN.md](docs/BUILDING-ON-DEBIAN.md) |
 | Ubuntu | **untried** | same header split as Debian, so the same fix should apply |
-| Proxmox VE | **untried** | the natural fit, but its stock kernels land in or past the broken range, so the kernel must be pinned |
+| Proxmox VE 8.4 on Debian 12 | **yes** | installed on top of Debian 12 keeping the 6.1 kernel; `pve-manager/8.4.21` on 6.1.0-53-amd64, 18 profiles, Xid 0. See [PROXMOX.md](docs/PROXMOX.md). Not installable from its own ISO - every current Proxmox kernel is 6.8 or newer |
 | Fedora / RHEL | **untried** | some ship a 2 MB OVMF under a generic name, which will not pair with a 4 MB VARS |
 
 ## How to add a row
