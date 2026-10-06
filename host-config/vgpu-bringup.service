@@ -1,0 +1,38 @@
+[Unit]
+# Bring the vGPU host stack up at boot.
+#
+# Without this the modules are not loaded after a reboot, no mdev types are
+# registered, and any attempt to start a guest fails with no obvious reason.
+#
+# Ordering matters. The stack needs the data filesystem holding the module
+# trees and the kprobe helpers, so this waits for local filesystems. It also
+# starts nvidia-vgpud and nvidia-vgpu-mgr itself, in the right order, which is
+# why those units are listed as Before rather than After - bringup.sh drives
+# them, so systemd must not race it.
+Description=Bring up the NVIDIA vGPU host stack
+Documentation=https://github.com/Nium32/VGPU-MDEV-RTX-3090
+After=local-fs.target network.target
+Wants=local-fs.target
+Before=nvidia-vgpud.service nvidia-vgpu-mgr.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Point this at your clone. VGPU_CONF is honoured by lib/common.sh, so the
+# service can use a config outside the repository if you prefer.
+Environment=VGPU_CONF=/etc/vgpu.conf
+ExecStart=/opt/vgpu-scripts/scripts/bringup.sh
+
+# bringup.sh does a PCI function-level reset and reloads kernel modules. If it
+# fails there is no sensible automatic retry - a half-loaded stack is worse
+# than none, and the failure needs reading. Leave it failed and visible.
+Restart=no
+TimeoutStartSec=300
+
+# The log is written by the script itself; this keeps the journal useful too.
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
