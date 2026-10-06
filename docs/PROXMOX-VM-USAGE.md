@@ -371,50 +371,48 @@ id=102  The server has terminated main RDP connection with the client
 id=40   Session N has been disconnected, reason code 0
 ```
 
-The session is created and then produces no frames, because the WDDM path used for remote sessions
-does not come up on a GPU-accelerated guest. Forcing the legacy XDDM path fixes it:
+The session is created and then produces no frames. `qwinsta` in the guest confirms it — the
+listener is up, a session is created, and it dies — which is what separates this from a genuine
+authentication or firewall problem. Check that before chasing anything else.
+
+**This is unsolved. The obvious fix was tried here and did not work.**
+
+The usual advice is to force the legacy XDDM path with
 
 ```
 HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
     fEnableWddmDriver = 0   (REG_DWORD)
 ```
 
-On a stock guest that value is absent, which means WDDM. [`scripts/pve-fix-rdp-wddm.sh`](../scripts/pve-fix-rdp-wddm.sh)
-sets it offline on a stopped guest, the same way the Code 43 fix works, and reads the value back
-afterwards so a merge that silently did nothing is caught rather than reported as success.
+which is absent on a stock guest, meaning WDDM. That was applied to both guests here, offline, and
+read back to confirm it took. **It did not fix the hang — the next connection attempt failed
+earlier than before, at "initiating connection".** The setting has been reverted on both guests.
+[`scripts/pve-fix-rdp-wddm.sh`](../scripts/pve-fix-rdp-wddm.sh) remains in the repository because
+it is a correct and verified way to set and unset the value (`-r` reverts), not because the value
+helps. The plausible reason it cannot help: NVIDIA's vGPU guest driver is WDDM-only, so forcing
+XDDM leaves the remote session with no display driver at all.
 
-```bash
-qm stop <vmid>
-scripts/pve-fix-rdp-wddm.sh /srv/vgpu/pve/images/<vmid>/vm-<vmid>-disk-0.qcow2
-qm start <vmid>
-```
+**A retraction.** An earlier version of this section stated that the change blanks the Proxmox
+console, and presented that as measured. The console was indeed blank afterwards — but it is also
+blank with the value reverted to `1`, on a guest that is otherwise completely healthy (`ping` and
+RDP port responding, guest driver handshaked at `539.72`, `pteblit` 0, `Xid` 0). So the blanking
+was not attributable to this setting, and the causal claim was wrong. On this setup the emulated
+VGA head simply stops being painted once the vGPU driver takes over as primary, which also means
+the console is not a dependable way back into a guest here, whatever this policy is set to.
 
-**The trade-offs, both measured, not predicted:**
+**A confounder worth recording**, because it wasted time: while this was being tested the host
+vGPU stack wedged, with `Immediate pteblit ... timed out` and `Failed to push PTE blit request`
+repeating, one guest unable to start (`error getting device from group 23: Input/output error`)
+and the other losing its network. That is a host-side fault, not a guest display problem, and it
+can easily be mistaken for the RDP symptom getting worse. `scripts/bringup.sh` clears it: stop
+every guest, remove any leftover mdev, reload the stack, start the guests one at a time. After
+that, `pteblit` went to 0 and both guests came back healthy.
 
-The remote desktop surface is composited through the legacy path rather than the vGPU.
-Applications still use the GPU — CUDA and Direct3D are unaffected, and `nvidia-smi` in the guest
-still shows the card — but the remote desktop itself is no longer GPU-composited. If you want a
-GPU-composited remote session, RDP is the wrong transport; use a tool that does its own GPU
-capture and encode.
-
-**The Proxmox console goes blank.** After this change both guests here kept running normally —
-reachable by ping, RDP port open, `Xid 0` — while `qm monitor` `screendump` returned a solid
-blank image where it had previously returned a full desktop. So the earlier statement in this
-document that the console "always works" is only true *before* this change. Do not apply it to a
-guest whose console is your only way in. Recovery does not depend on the console in any case: the
-disk can always be edited offline with the scripts here, which is how the value got set in the
-first place.
-
-Reverting is one command, and then the console renders again:
-
-```bash
-qm stop <vmid>
-scripts/pve-fix-rdp-wddm.sh -r /srv/vgpu/pve/images/<vmid>/vm-<vmid>-disk-0.qcow2
-qm start <vmid>
-```
-
-Diagnose before applying it. `qwinsta` in the guest shows whether a session is being created at
-all, which separates this from a genuine authentication or firewall problem.
+**If you want a GPU-accelerated remote desktop, RDP is probably the wrong transport anyway.** Even
+working, it composites the remote session itself rather than capturing and encoding on the GPU —
+and hardware AVC encode is off by default, as above. Parsec, or Sunshine with a Moonlight client,
+do their own GPU capture and NVENC encode, which is what actually exploits the card. That is the
+recommended direction and is untested here.
 
 #### Or keep them private, over an SSH tunnel
 
