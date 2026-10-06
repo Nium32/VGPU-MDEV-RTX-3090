@@ -75,6 +75,8 @@ scripts/preflight.sh   report what this machine looks like; changes nothing
 scripts/bringup.sh     load the stack in the order that works
 scripts/startguest.sh  create an mdev and boot a guest on it
 scripts/hardreset.sh   full teardown, including the vfio core
+scripts/pve-newvm.sh   create another vGPU guest end to end, including the throwaway boot
+scripts/pve-vgpu-portmap.sh  publish each running guest's RDP port on the LAN
 scripts/pve-fix-nvidia-regkeys.sh  write the guest tuning keys into a stopped guest's
                        registry offline, for when Windows allocates a new class subkey
 scripts/as-run/        the original machine-specific versions, kept for provenance

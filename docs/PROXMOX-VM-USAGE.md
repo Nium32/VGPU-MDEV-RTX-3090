@@ -198,7 +198,22 @@ read-only, so a failed edit cannot be mistaken for a successful one.
 ## 4. Adding another VM
 
 Because the subkey is created the first time Windows sees the device at its new address, a brand
-new VM needs **one throwaway boot** before the fix can land. The full cycle:
+new VM needs **one throwaway boot** before the fix can land.
+
+[`scripts/pve-newvm.sh`](../scripts/pve-newvm.sh) does the whole cycle, including that boot and the
+wait for Windows to finish coming up:
+
+```bash
+scripts/pve-newvm.sh 102                 # create, throwaway boot, fix, start
+scripts/pve-newvm.sh -n 102              # dry run: print every command, change nothing
+```
+
+It refuses up front rather than halfway through if the VM id is taken, the parent image or EFI
+template is unreadable, or the profile has no instances left. Defaults (`GPU_BDF`, `MDEV_TYPE`,
+`STORAGE`, `PARENT`, `MEM`, `CORES`) are environment overrides; the GPU is auto-discovered from
+`lspci`.
+
+The manual sequence it automates, for reference:
 
 ```bash
 SRC=100           # the VM you are copying
@@ -290,21 +305,72 @@ the NVIDIA driver takes over as the primary display, the accelerated desktop goe
 this console keeps showing the emulated head. A visible symptom is desktop icons disappearing from
 the console view while the taskbar clock keeps ticking.
 
-### RDP over an SSH tunnel — this is the one that uses the GPU
+### RDP — the accelerated desktop
 
-RDP renders and encodes on the vGPU, so this is how you actually get the accelerated desktop.
-`AllowTcpForwarding` is on by default, so no host configuration is needed:
+The desktop is composited on the vGPU, so RDP is how you see what the card is actually doing:
+`nvidia-smi` in the guest lists `explorer.exe`, `ShellHost.exe` and `SearchHost.exe` as `C+G`
+clients.
 
-```bash
-ssh -N -L 13389:10.10.10.54:3389 -L 13390:10.10.10.81:3389 <user>@<host-ip>
+One correction to an earlier version of this document, which claimed RDP "renders and encodes" on
+the vGPU. Rendering, yes. **Encoding, not by default** — H.264/AVC hardware encode of the RDP
+stream is a separate Group Policy toggle, and on a stock guest the values simply do not exist:
+
+```
+HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+    AVCHardwareEncodePreferred   (absent)
+    AVC444ModePreferred          (absent)
 ```
 
-Then point any RDP client at `127.0.0.1:13389` for the first guest and `127.0.0.1:13390` for the
-second. On Windows that is `mstsc /v:127.0.0.1:13389`. Nothing is exposed to the LAN: the listening
-socket is on your own machine, and `GatewayPorts` is `no`.
+So the session is software-encoded unless you enable those under *Computer Configuration →
+Administrative Templates → Windows Components → Remote Desktop Services → Remote Desktop Session
+Host → Remote Session Environment*.
 
-Credentials are the guest's own Windows account. Port 3389 answering means RDP is already enabled
-in the guest.
+RDP is already enabled in the guest if `fDenyTSConnections` is `0` under
+`HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server`. Credentials are the guest's own Windows
+account.
+
+#### Publishing the guests on the LAN
+
+The convenient option: DNAT a host port to each guest, so a LAN client connects to
+`<host-ip>:<port>` with no tunnel at all. [`scripts/pve-vgpu-portmap.sh`](../scripts/pve-vgpu-portmap.sh)
+does this for every *running* guest that has a vGPU attached, using
+
+```
+port = 13289 + vmid          so VM 100 -> 13389, 101 -> 13390, 102 -> 13391
+```
+
+It resolves each guest's current DHCP lease by MAC, so it keeps working when addresses change, and
+it keeps all its rules in a dedicated `VGPURDP` chain, so re-running it is idempotent and
+`iptables -t nat -F VGPURDP` removes the lot. Drive it from a timer so the rules follow guests as
+they start and stop:
+
+```ini
+# /etc/systemd/system/vgpu-rdp-portmap.timer
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+```
+
+The script takes an exclusive `flock`. Without it a timer firing between the chain flush and the
+appends duplicates rules — which is exactly what happened the first time this was run by hand while
+the timer was active.
+
+> **This exposes Windows RDP to your local network.** Anything on that network can reach the login
+> prompt and try passwords. Use a strong password on the guest account, and do not forward these
+> ports from a router to the internet.
+
+#### Or keep them private, over an SSH tunnel
+
+If you would rather expose nothing, tunnel instead. `AllowTcpForwarding` is on by default and
+`GatewayPorts` is `no`, so the listening socket is only on your own machine:
+
+```bash
+ssh -N -L 13389:<guest-ip>:3389 <user>@<host-ip>
+```
+
+Then connect to `127.0.0.1:13389`. The tunnel must stay running for the whole session — if the
+RDP client reports it cannot connect, check the `ssh` process is still alive before looking
+anywhere else.
 
 ### Stable addresses
 
