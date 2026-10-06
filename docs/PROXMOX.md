@@ -127,6 +127,29 @@ done
 `scripts/startguest.sh` already handles this: QEMU runs inside a wrapper subshell that releases
 the mdev when QEMU exits, whatever the exit status. A hand-rolled launcher will not.
 
+## Coming up at boot
+
+`host-config/vgpu-bringup.service` runs `bringup.sh` at boot. Without it the modules are not
+loaded after a reboot, no mdev types are registered, and starting a guest fails with nothing
+obvious to point at.
+
+```bash
+sudo mkdir -p /opt/vgpu-scripts
+sudo cp -r lib scripts /opt/vgpu-scripts/
+sudo cp vgpu.conf /etc/vgpu.conf
+sudo cp host-config/vgpu-bringup.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable vgpu-bringup.service
+```
+
+Verified across a real reboot: `Result=success`, 18 profiles, `nvidia-664 avail=3`,
+`nvidia-vgpu-mgr active`, `nouveau 0`, `xid 0`, with no manual step. It costs about 24 seconds of
+boot time and is the largest single item in `systemd-analyze blame` on this host, which is the
+price of a PCI reset plus a driver reload.
+
+**Do not give that unit `Before=nvidia-vgpud.service`.** It deadlocks: `bringup.sh` starts
+`nvidia-vgpud` itself and waits for it, while `Before=` tells systemd not to start that unit until
+`bringup.sh` has exited. The unit hangs at step 2 until `TimeoutStartSec`. This was tried.
+
 ## What Proxmox does and does not give you here
 
 It gives you the web UI, the storage and backup layer, and the VM lifecycle tooling.
