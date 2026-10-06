@@ -11,7 +11,7 @@ Identical driver, identical host configuration, identical hardware. Only the ker
 |---|---|---|---|---|
 | 5.15.95-051595-generic | real | 0 | 0 | works |
 | **6.1.71-1-lts** | **real** | **0** | **0** | **works — this is the one** |
-| **6.1.0-53-amd64** (Debian 12) | **real** | **0** | **0** | **works** — stack comes up identically, 18 RTXA5000 profiles, `avail=3`, Xid 0 |
+| **6.1.0-53-amd64** (Debian 12) | **real** | **0** | **0** | **works — CUDA-ALL-PASS**, compute verified by readback. See below. |
 | 6.8.9-arch1-2 | poison | 50 | 100 | fails |
 | 6.18.52-1-cachyos-lts | poison | ~76 | ~152 | fails |
 
@@ -23,6 +23,36 @@ Rows 1, 3 and 4 were not re-run when this repository was written. Row 2 is the r
 was measured directly: over a 35-minute window with a guest active, `nvidia-vgpu-mgr` logged 78
 lines, every one `status=0x0`, with zero `error:` lines, zero `Immediate pteblit`, and
 `dmesg | grep -ci xid` = 0 across the whole boot.
+
+### Verified on a second 6.1 build
+
+The reference configuration is 6.1.71-1-lts on CachyOS. On 2026-10-06 the same driver was rebuilt
+on **Debian 12 bookworm, kernel 6.1.0-53-amd64**, and the guest verified compute by reading data
+back:
+
+```
+==== CUDA test 2026-10-06 04:33:29 user=Test ====
+cuInit rc=0
+driverVersion=12020 deviceCount=1
+device='NVIDIA RTXA5000-8Q' computeCapability=8.6
+cuCtxCreate rc=0
+mem free=6586 MiB total=8191.9375 MiB
+COPY-PASS (4 MiB roundtrip verified)
+cuLaunchKernel rc=0 grid=4097 block=256
+verified 1052 sampled elements
+COMPUTE-PASS (every sampled element matches the kernel output)
+CUDA-ALL-PASS
+```
+
+Host/guest handshake `535.309.01` / `539.72`, vGPU version `0x120001`, 18 RTXA5000 profiles,
+`pteblit=0 errors=0 xid=0` across 676 plugin log lines. The result file was confirmed newer than a
+marker stamped before the trigger, so it is from that run and not a leftover.
+
+Two consequences. The 6.1 **series** works, not merely the one 6.1.71 build. And
+`_nv042311rm+0x28` placed correctly on a different kernel build, so the symbol-plus-offset form of
+the kprobe spec is portable across kernel builds of the same driver — only raw addresses move.
+
+Debian needs two extra things; see [BUILDING-ON-DEBIAN.md](BUILDING-ON-DEBIAN.md).
 
 ### The gap nobody has measured
 

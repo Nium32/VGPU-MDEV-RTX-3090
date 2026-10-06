@@ -93,7 +93,7 @@ chipset is sufficient.
 |---|---|---|
 | CachyOS (arch-like), rolling | **yes** | the reference |
 | Arch | **untried** | should be identical |
-| Debian 12 bookworm | **yes** | kernel 6.1.0-53-amd64. Needs the split-header fix below and `/etc/vgpu_unlock/config.toml`. OVMF at `/usr/share/OVMF/OVMF_CODE_4M.fd` |
+| Debian 12 bookworm | **yes — CUDA-ALL-PASS** | kernel 6.1.0-53-amd64, compute verified by readback. Needs the split-header fix and `/etc/vgpu_unlock/config.toml`; see [BUILDING-ON-DEBIAN.md](docs/BUILDING-ON-DEBIAN.md) |
 | Ubuntu | **untried** | same header split as Debian, so the same fix should apply |
 | Proxmox VE | **untried** | the natural fit, but its stock kernels land in or past the broken range, so the kernel must be pinned |
 | Fedora / RHEL | **untried** | some ship a 2 MB OVMF under a generic name, which will not pair with a 4 MB VARS |
