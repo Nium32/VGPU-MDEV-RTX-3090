@@ -32,6 +32,17 @@ jobs:
           fi
           echo "none found"
 
+      - name: Scripts must be executable
+        run: |
+          # Committing from Windows loses the exec bit, and a clone then gives
+          # scripts that fail with "command not found" while every doc says to
+          # run them directly. This shipped once already.
+          bad=$(git ls-files -s '*.sh' '*.py' | awk '$1=="100644" {print $4}')
+          if [ -n "$bad" ]; then
+            echo "not executable:"; echo "$bad"; exit 1
+          fi
+          echo "all scripts executable"
+
       - name: Reject machine-specific values
         run: |
           # The repository is scrubbed of one machine's details. Keep it that way.
