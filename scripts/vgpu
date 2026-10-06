@@ -6,6 +6,9 @@
 #   vgpu stop        turn the VMs off
 #   vgpu fix         it broke - fix it (reloads the stack, restarts the VMs)
 #   vgpu new 102     make another VM
+#   vgpu save        save the current state of every VM, so you can go back
+#   vgpu saves       list saved states
+#   vgpu restore <name>   put every VM back to a saved state
 #   vgpu ip          what addresses do I connect to?
 #   vgpu log         what went wrong?
 #
@@ -28,7 +31,9 @@ guest_ip() {
     local mac
     mac=$(sed -n 's/^net0: .*=\([0-9A-Fa-f:]*\),bridge.*/\1/p' "/etc/pve/qemu-server/$1.conf" 2>/dev/null | head -1)
     [ -n "$mac" ] || return
-    ip neigh | grep -i "$mac" | grep -v FAILED | awk '{print $1}' | head -1
+    # Exclude only the states that carry no usable address. STALE is the normal
+    # resting state for a valid entry, so filtering it out loses the common case.
+    ip neigh | grep -i "$mac" | grep -vE 'FAILED|INCOMPLETE' | awk '{print $1}' | head -1
 }
 
 cmd_status() {
@@ -55,22 +60,33 @@ cmd_status() {
 }
 
 cmd_start() {
-    local v
+    local v rc=0
     for v in $(guests); do
         if [ "$(qm status "$v" 2>/dev/null)" = "status: running" ]; then
             echo "   VM $v already running"
         else
-            echo "   starting VM $v"
-            qm start "$v" >/dev/null 2>&1
-            sleep 20
+            printf '   starting VM %s ... ' "$v"
+            if qm start "$v" >/dev/null 2>&1; then
+                sleep 20
+                if [ "$(qm status "$v" 2>/dev/null)" = "status: running" ]; then
+                    echo "running"
+                else
+                    echo "started but is not running"; rc=1
+                fi
+            else
+                echo "FAILED"; rc=1
+            fi
         fi
     done
     echo
-    echo "If a VM did not start, run:  vgpu fix"
+    if [ "$rc" -ne 0 ]; then
+        echo "At least one VM did not start. Run:  vgpu fix"
+    fi
+    return "$rc"
 }
 
 cmd_stop() {
-    local v
+    local v rc=0
     for v in $(guests); do
         echo "   stopping VM $v"
         qm shutdown "$v" --timeout 90 >/dev/null 2>&1
@@ -82,9 +98,15 @@ cmd_stop() {
         done
         if [ "$(qm status "$v" 2>/dev/null)" != "status: stopped" ]; then
             qm stop "$v" >/dev/null 2>&1
+            sleep 5
+        fi
+        if [ "$(qm status "$v" 2>/dev/null)" = "status: stopped" ]; then
+            echo "   VM $v stopped"
+        else
+            echo "   VM $v WILL NOT STOP (still $(qm status "$v" 2>/dev/null))"; rc=1
         fi
     done
-    echo "   all stopped"
+    return "$rc"
 }
 
 cmd_fix() {
@@ -99,7 +121,58 @@ cmd_fix() {
 cmd_new() {
     local id=${1:-}
     if [ -z "$id" ]; then echo "Which number? Example:  vgpu new 102" >&2; exit 1; fi
-    "$D/pve-newvm.sh" "$id"
+    if ! "$D/pve-newvm.sh" "$id"; then
+        echo "Creating VM $id failed. Nothing was started." >&2
+        return 1
+    fi
+}
+
+cmd_save() {
+    local name=${1:-}
+    if [ -z "$name" ]; then name="save-$(date '+%Y%m%d-%H%M')"; fi
+    echo "Saving every VM as: $name"
+    local v
+    for v in $(guests); do
+        printf '   VM %s ... ' "$v"
+        if qm snapshot "$v" "$name" --description "vgpu save" >/dev/null 2>&1; then
+            echo "saved"
+        else
+            echo "FAILED (already exists? try another name)"
+        fi
+    done
+    echo
+    echo "Go back later with:  vgpu restore $name"
+}
+
+cmd_saves() {
+    local v
+    for v in $(guests); do
+        echo "VM $v"
+        qm listsnapshot "$v" 2>/dev/null | sed 's/^/   /'
+    done
+}
+
+cmd_restore() {
+    local name=${1:-}
+    if [ -z "$name" ]; then
+        echo "Which save? Run 'vgpu saves' to see them, then:  vgpu restore <name>" >&2
+        exit 1
+    fi
+    echo "This throws away everything both VMs have done since '$name'."
+    echo "Starting in 5 seconds - press Ctrl-C to stop."
+    sleep 5
+    cmd_stop
+    local v
+    for v in $(guests); do
+        printf '   VM %s ... ' "$v"
+        if qm rollback "$v" "$name" >/dev/null 2>&1; then
+            echo "restored"
+        else
+            echo "FAILED (no save called '$name' on this VM?)"
+        fi
+    done
+    echo
+    echo "Now start them:  vgpu fix"
 }
 
 cmd_ip() {
@@ -127,6 +200,9 @@ case "${1:-help}" in
     stop)   cmd_stop ;;
     fix)    cmd_fix ;;
     new)    shift; cmd_new "$@" ;;
+    save)   shift; cmd_save "$@" ;;
+    saves)  cmd_saves ;;
+    restore) shift; cmd_restore "$@" ;;
     ip)     cmd_ip ;;
     log)    cmd_log ;;
     *)

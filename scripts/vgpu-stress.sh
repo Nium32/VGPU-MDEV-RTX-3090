@@ -20,15 +20,13 @@ guest_ip() {
     local mac
     mac=$(sed -n 's/^net0: .*=\([0-9A-Fa-f:]*\),bridge.*/\1/p' "/etc/pve/qemu-server/$1.conf" 2>/dev/null | head -1)
     [ -n "$mac" ] || return
-    ip neigh | grep -i "$mac" | grep -v FAILED | awk '{print $1}' | head -1
+    ip neigh | grep -i "$mac" | grep -vE 'FAILED|INCOMPLETE' | awk '{print $1}' | head -1
 }
 
 pass=0; fail=0
 say() { printf '%s\n' "$*"; printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 bad() { say "    FAIL: $*"; fail=$((fail+1)); }
 ok()  { say "    ok  : $*"; pass=$((pass+1)); }
-
-xid_before=$(dmesg | grep -ci xid || true)
 
 for c in $(seq 1 "$CYCLES"); do
     say "== cycle $c/$CYCLES =="
@@ -50,7 +48,7 @@ for c in $(seq 1 "$CYCLES"); do
         for v in "${VMS[@]}"; do
             if ping -c1 -W1 "$(guest_ip "$v")" >/dev/null 2>&1; then up=$((up+1)); fi
         done
-        if [ "$up" -eq 2 ]; then break; fi
+        if [ "$up" -eq "${#VMS[@]}" ]; then break; fi
         sleep 5
     done
     sleep 90
@@ -62,8 +60,8 @@ for c in $(seq 1 "$CYCLES"); do
         out=$("$GEXEC" "$v" <<'PS' 2>/dev/null
 $g = Get-CimInstance Win32_VideoController | Where-Object { $_.Name -like '*NVIDIA*' }
 "ERR={0}" -f $g.ConfigManagerErrorCode
-$l = & "C:\Windows\System32\nvidia-smi.exe" -q 2>&1 | Select-String 'License Status'
-"LIC={0}" -f ($l -replace '.*:\s*','')
+$l = (& "C:\Windows\System32\nvidia-smi.exe" -q 2>&1 | Select-String 'License Status' | Select-Object -First 1).ToString()
+if ($l -match 'License Status\s*:\s*(.+)$') { "LIC={0}" -f $Matches[1].Trim() } else { "LIC=unknown" }
 PS
 )
         if printf '%s' "$out" | grep -q 'ERR=0'; then
@@ -78,12 +76,15 @@ PS
         fi
     done
 
-    newxid=$(dmesg | grep -ci xid || true)
-    if [ "$newxid" -le "$xid_before" ]; then
+    # A module reload clears dmesg, so the count can legitimately drop. Count only
+    # Xid lines logged since this cycle began; comparing totals either cries wolf on
+    # a reload or hides real Xids that a reload wiped.
+    newxid=$(journalctl -k --since "$mark" --no-pager 2>/dev/null | grep -ci 'Xid' || true)
+    if [ "$newxid" -eq 0 ]; then
         ok "no new Xid"
     else
-        bad "Xid went $xid_before -> $newxid"
-        xid_before=$newxid
+        bad "$newxid Xid line(s) logged this cycle"
+        journalctl -k --since "$mark" --no-pager 2>/dev/null | grep -i 'Xid' | tail -2 | sed 's/^/      /'
     fi
 
     pte=$(journalctl -u nvidia-vgpu-mgr --since "$mark" --no-pager 2>/dev/null | grep -ci 'pte blit' || true)

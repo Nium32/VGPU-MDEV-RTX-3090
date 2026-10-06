@@ -6,10 +6,14 @@ machine a game went from **60 fps to 15 fps** with the host GPU sitting at 1–7
 utilisation — nothing saturated, nothing in `dmesg`, no Xid. It reads exactly like a
 driver or display bug, and it is neither.
 
-The one line that tells you:
+The one line that tells you, **in the guest**:
 
+```powershell
+# Windows guest
+nvidia-smi -q | Select-String -Context 0,3 'vGPU Software Licensed Product'
+```
 ```bash
-# in the guest
+# Linux guest
 nvidia-smi -q | grep -A3 'vGPU Software Licensed Product'
 ```
 
@@ -147,9 +151,15 @@ Two separate faults stacked:
 * `w32time` had never synced once, and would not: `w32tm /resync` returned
   `The computer did not resync because no time data was available`.
 
-The second fault has a non-obvious cause. **Windows refuses to correct a clock that is
-off by more than a default threshold**, and simply gives up rather than saying so. A
-three-hour error exceeds it. Raising the limits is what finally let it sync:
+`no time data was available` means **no NTP source answered** — consistent with the other reading,
+`Source: Local CMOS Clock`, i.e. no peer was ever configured.
+
+The block below changes two things at once: it configures peers, and it removes the
+phase-correction ceiling (`MaxPosPhaseCorrection` / `MaxNegPhaseCorrection`, which cap how large a
+correction Windows will accept). The guest synced afterwards. **Which of the two mattered was not
+isolated.** The default ceiling is 15 hours on a standalone client, so a 3-hour skew should not
+have hit it, and the missing peer is the more likely cause. An earlier version of this document
+asserted the ceiling was the reason; that was inference presented as a finding.
 
 ```powershell
 tzutil /s "<same zone as the host>"
@@ -190,26 +200,37 @@ lease. On this hardware that was a dead end, and the clock was the real cause.
 
 | Attempt | Result |
 |---|---|
-| Certificate with SAN | Correct and necessary, but did not by itself fix it |
-| Importing the DLS cert into the guest's `LocalMachine\Root` and `\CA` | **No effect.** NVIDIA pins its own CA inside the driver, not the Windows store |
-| `gridd-unlock-patcher` 1.1 against `nvxdapix.dll` from driver **539.72** | **Failed:** `Failed to find the hardcoded NLS certificates!` — produced a byte-identical file |
-| Prebuilt patched `nvxdapix.dll` | Not viable: the published one targets driver 573.39 (vGPU 18.x), which will not negotiate with a 535 host |
-| **Fixing the guest clock** | **This was it.** Lease issued immediately afterwards |
+| Certificate with SAN | Good practice, and it is what the working setup uses. **Necessity untested** — the CN-only certificate was replaced before the clock was fixed, so it was never retried against a correct clock |
+| Importing the DLS cert into the guest's `LocalMachine\Root` and `\CA` | **No effect.** Why is not established: the obvious explanation is that the driver pins its own CA, but that was not demonstrated |
+| `gridd-unlock-patcher` 1.1 against `nvxdapix.dll` from driver **539.72** | **Failed:** `Failed to find the hardcoded NLS certificates!` — produced a byte-identical file, so nothing was installed |
+| **Fixing the guest clock** | **This was it.** The lease was issued immediately afterwards |
 
-So on vGPU 17.x (`535.x` host, `539.72` guest), no binary patching was needed at all.
-If you reach for the patcher first, as happened here, you will waste time on a
-component that was never the blocker.
+With host `535.309.01` and guest `539.72`, no binary patching was needed at all. If you reach for
+the patcher first, as happened here, you will spend the time on a component that was never the
+blocker.
+
+Not attempted, and listed only so it is not mistaken for a finding: substituting a prebuilt patched
+`nvxdapix.dll`. The published ones target other driver builds, and mixing a guest driver across a
+version boundary from the host is its own problem — but none of that was tested here.
+
+**How much skew is too much is not established.** The failing case was three hours. Whether
+seconds or minutes matter is unknown, so keep the guest within a second or two of the server and do
+not treat any particular margin as safe.
 
 ---
 
 ## Operational notes
 
-* The licence renews against the DLS roughly every 13 days, and the client token here
-  is valid for 12 years. The container must keep running — `--restart unless-stopped`
-  covers reboots.
-* Losing the DLS does not instantly throttle a guest; it falls back to the grace
-  period and only restricts once that expires. That delay is exactly what makes the
-  symptom hard to attribute.
+* Two different durations, easily confused. The **lease** issued here was valid ~90 days
+  (`Licensed (Expiry: 2027-1-4 ...)` issued on 2026-10-06), which is FastAPI-DLS's default; the
+  client **renews** it far more often, roughly every 13 days. The client token file itself is
+  valid for years. The container must keep running — `--restart unless-stopped` covers reboots.
+* Losing the DLS should not throttle a guest immediately — it falls back to the grace period and
+  only restricts once that expires. That delay is what makes the symptom hard to attribute. This
+  was not deliberately tested; it is how the mechanism is meant to behave.
+* A guest that has just booted reports `Unlicensed (Unrestricted)` for a minute or two before
+  acquisition completes. Do not read the licence state immediately after a restart and conclude it
+  failed — check the DLS log for the `lessor` call instead.
 * `nvidia-smi vgpu` on the **host** reports `No supported devices in vGPU mode` on an
   unlocked card, because the spoof lives in the `LD_PRELOAD`ed daemons while
   `nvidia-smi` talks to `nvidia.ko`. Read licence state in the guest instead.

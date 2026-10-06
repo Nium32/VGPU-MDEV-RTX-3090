@@ -80,16 +80,15 @@ scripts/startguest.sh  create an mdev and boot a guest on it
 scripts/hardreset.sh   full teardown, including the vfio core
 scripts/vgpu-recover.sh  clear the teardown wedge: stop all, reload the stack, start again
 scripts/vgpu-provision.sh  install driver, agent, Sunshine, display driver and licence
-                       token into a guest; you supply the driver, it does the rest
+                       token into a guest; you supply the driver, it does the rest.
+                       WRITTEN BUT NEVER RUN END TO END - read it before trusting it
 scripts/vgpu-stress.sh   regression harness: recover cycles asserting licence, Xid and
-                       pte-blit all stay clean
+                       pte-blit all stay clean. Has completed single cycles, not yet a
+                       clean multi-cycle run
 scripts/vgpu-guest-timesync.sh  keep guest clocks matched to the host - licensing breaks
                        silently when they drift
 scripts/gexec.sh       run a PowerShell snippet in a guest through the QEMU guest agent
-scripts/pve-vgpu-sunshine-map.sh  one LAN address per guest; Moonlight pins its server
-                       certificate per IP, so two guests behind one address collide
 scripts/pve-newvm.sh   create another vGPU guest end to end, including the throwaway boot
-scripts/pve-vgpu-portmap.sh  publish each running guest's RDP port on the LAN
 scripts/pve-fix-rdp-wddm.sh  set/unset fEnableWddmDriver offline (-r reverts); did NOT fix
                        the RDP hang here - kept because it is a verified way to toggle it
 scripts/pve-fix-nvidia-regkeys.sh  write the guest tuning keys into a stopped guest's
@@ -125,6 +124,13 @@ are not public downloads. If a version has been withdrawn or you cannot reach th
 Internet Archive is a genuinely good place to look - older vGPU and GRID installers are often
 mirrored there. Check the version matches what you need exactly, because the kprobe offset is tied
 to one driver build.
+
+**No restarting one guest on its own.** Once any guest has been stopped, none will start again
+until the NVIDIA kernel modules are reloaded — and that is true with nothing else running, so it
+is not a contention problem. In practice the guests are one set that starts and stops together;
+`vgpu fix` does the reload and brings them all back. Rebooting from inside Windows avoids it
+entirely. Unsolved, with the eliminated causes recorded in
+[notes/WHAT-DIDNT-WORK.md](notes/WHAT-DIDNT-WORK.md).
 
 **Licensing is separate, and it bites hard.** Unlocking the device gating has nothing to do with
 vGPU licensing. Once the grace period expires a guest reports `Unlicensed (Restricted)` and the

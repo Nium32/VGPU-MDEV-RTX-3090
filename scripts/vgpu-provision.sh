@@ -73,22 +73,31 @@ cleanup() {
 trap cleanup EXIT
 modprobe nbd max_part=16
 qemu-nbd --disconnect "$NBD" >/dev/null 2>&1 || true
-qemu-nbd --connect="$NBD" "$DISK"; sleep 2
+qemu-nbd --connect="$NBD" "$DISK" || { echo "qemu-nbd could not attach $DISK" >&2; exit 1; }
+sleep 2
 PART=$(lsblk -bnro NAME,SIZE "$NBD" | awk 'NR>1{print $1, $2}' | sort -k2 -n | tail -1 | cut -d' ' -f1)
+[ -n "$PART" ] || { echo "no partitions on $NBD - is the disk empty or still attaching?" >&2; exit 1; }
 mount -t ntfs3 "/dev/$PART" "$MNT" 2>/dev/null \
   || ntfs-3g -o remove_hiberfile "/dev/$PART" "$MNT" 2>/dev/null \
-  || mount "/dev/$PART" "$MNT"
+  || mount "/dev/$PART" "$MNT" 2>/dev/null || true
+# Confirm it really mounted. Without this check a failed mount leaves $MNT an empty
+# local directory, and every file below would be copied into the host filesystem
+# while reporting success.
+mountpoint -q "$MNT" || { echo "could not mount /dev/$PART - refusing to write anywhere else" >&2; exit 1; }
 case ",$(findmnt -no OPTIONS "$MNT")," in
-    *,ro,*) echo "guest filesystem mounted read-only - aborting" >&2; exit 1 ;;
+    *,ro,*) echo "guest filesystem mounted read-only (hibernated guest?) - aborting" >&2; exit 1 ;;
 esac
 
 mkdir -p "$MNT/vgpu-setup"
-cp "$STAGING"/* "$MNT/vgpu-setup/" 2>/dev/null || true
+if ! cp "$STAGING"/* "$MNT/vgpu-setup/" 2>/dev/null; then
+    echo "could not copy the staging files into the guest" >&2; exit 1
+fi
 printf "   copied: %s file(s) to C:\\\\vgpu-setup\n" "$(find "$MNT/vgpu-setup" -type f | wc -l)"
 umount "$MNT"; qemu-nbd --disconnect "$NBD" >/dev/null 2>&1
 
 # The two tuning values must exist on whichever display-class subkey Windows binds.
 "$(dirname "$0")/pve-fix-nvidia-regkeys.sh" "$DISK" 2>&1 | sed 's/^/   /'
+[ "${PIPESTATUS[0]}" -eq 0 ] || { echo "registry tuning failed - stopping before the guest boots" >&2; exit 1; }
 
 say "starting VM $VMID"
 qm start "$VMID" >/dev/null 2>&1
