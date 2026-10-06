@@ -92,9 +92,14 @@ info "version $(cat /sys/module/nvidia/version 2>/dev/null)"
 
 say "2. nvidia-vgpud"
 systemctl restart "$VGPUD_UNIT"; sleep 6
-systemctl is-active --quiet "$VGPUD_UNIT" ||
-    die "$VGPUD_UNIT did not start - check: journalctl -u $VGPUD_UNIT"
-info "$VGPUD_UNIT active"
+# nvidia-vgpud is Type=oneshot. It configures RM and exits, so after a
+# SUCCESSFUL run systemctl is-active reports "inactive" - testing that would
+# fail every single time. Check the unit's recorded Result instead.
+_res=$(systemctl show -p Result --value "$VGPUD_UNIT" 2>/dev/null)
+if [ "$_res" != "success" ]; then
+    die "$VGPUD_UNIT failed (Result=$_res) - check: journalctl -u $VGPUD_UNIT"
+fi
+info "$VGPUD_UNIT completed (Result=success)"
 
 say "3. nvidia-vgpu-vfio.ko"
 insmod "$MDIR/nvidia-vgpu-vfio.ko" || die "insmod nvidia-vgpu-vfio.ko failed"
