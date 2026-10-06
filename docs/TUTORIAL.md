@@ -814,6 +814,42 @@ sudo ./scripts/hardreset.sh
 sudo ./scripts/bringup.sh
 ```
 
+### Stopping a guest costs you a reload
+
+The sequence above hides something that bites in practice: **after a guest has been stopped, no
+guest will start again until the NVIDIA kernel modules are reloaded.** You get
+
+```
+Timed out (6001 ms) trying to sync
+init_device_instance failed for inst 0 with error 7 (init frame copy engine)
+```
+
+and that is true even with nothing else running — it is not a contention problem. So the honest
+loop is start → use → stop → **reload** → start, never start → stop → start. The eliminated causes
+are in [notes/WHAT-DIDNT-WORK.md](../notes/WHAT-DIDNT-WORK.md); it is unsolved.
+
+Two things make it tolerable. Rebooting from *inside* Windows never triggers it, because the VM
+keeps hold of the mdev throughout. And `scripts/vgpu` wraps the whole recovery:
+
+```bash
+vgpu status     # is it working?
+vgpu fix        # it broke - stop everything, reload, start everything (~2 min)
+vgpu save       # snapshot every guest so you can roll back
+vgpu ip         # what do I connect to?
+```
+
+### Licensing, which you will hit within a day
+
+An unlicensed vGPU runs at full speed for a grace period and then throttles hard —
+`Unlicensed (Restricted)`, measured here as 60 fps becoming 15 with the GPU almost idle. There is
+no error anywhere; it looks like a driver fault. See [LICENSING.md](LICENSING.md), and check
+
+```bash
+nvidia-smi -q | grep 'License Status'      # in the guest
+```
+
+**first** whenever performance collapses for no reason.
+
 ### Why hardreset exists
 
 If a QEMU holding an mdev dies by `SIGKILL`, the IOMMU group stays wedged. Unloading the nvidia

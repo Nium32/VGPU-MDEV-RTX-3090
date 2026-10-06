@@ -262,6 +262,48 @@ Right-click the VM → **Clone** works, and is genuinely two clicks, with three 
   `qm set <newid> --smbios1 uuid=$(printf "00000000-0000-0000-0000-%012d" <newid>)`
 * The clone still needs the throwaway boot and the registry fix from step 3–4.
 
+### Changing what the profile advertises
+
+`vgpu_unlock-rs` reads `/etc/vgpu_unlock/profile_override.toml` and patches the profile the plugin
+hands to each guest, at VM start. This is separate from `config.toml`, which only holds the PCI
+spoof. Nothing in the repository needed it until the frame rate limiter turned up.
+
+```toml
+[profile.nvidia-664]
+frl_enabled = 0
+```
+
+The plugin confirms every override in its log, which is the only reliable way to know one applied:
+
+```
+Applying profile nvidia-664 overrides
+Patching nvidia-664/frl_enable: 1 -> 0
+```
+
+Note that `sysfs` still reports the **unpatched** value — `mdev_supported_types/<type>/description`
+is the static type listing, not the live instance. Read the plugin log, not sysfs.
+
+**`frl_enabled = 0` is worth setting.** The stock profile ships `frl_config=60`, a hard 60 FPS cap
+on the guest. With a virtual display at 120 or 144 Hz the compositor paces for a rate the GPU is
+not permitted to deliver, and the result is visible stutter that looks like a performance problem
+and is not one. Removing the cap costs nothing.
+
+The field names come from `VgpuProfileOverride` inside `libvgpu_unlock_rs.so`, and the full set is:
+
+```
+card_name  vgpu_type  max_instances  num_displays  display_width  display_height
+max_pixels  frl_config  cuda_enabled  ecc_supported  mig_instance_size
+multi_vgpu_supported  pci_id  pci_device_id  framebuffer  mappable_video_size
+framebuffer_reservation  bar1_length  frl_enabled  adapter_name  short_gpu_name
+license_type
+```
+
+A caution drawn from getting this wrong: `bar1_length` looks like an obvious lever when a second
+guest will not start, because the card's BAR1 aperture is 256 MiB and the profile claims all of it
+per vGPU. Reducing it does silence the `pte blit resource initialization failed with error 7`
+messages — and changes nothing, because two guests run concurrently on the stock setting anyway
+and the real fault is the teardown wedge below. Do not reach for it.
+
 ### Limits
 
 `available_instances` on `nvidia-664` is **3**, so three concurrent guests on this card. Check
