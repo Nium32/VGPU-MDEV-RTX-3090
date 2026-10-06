@@ -285,6 +285,12 @@ check_modeset_absent() {
 # card all pass "is nvidia in lsmod" and would then be reset underneath.
 bound_driver() {
     local l
+    # The driver entry is a symlink that only exists while something is bound.
+    # Test for the symlink first: readlink -f succeeds on a path whose LAST
+    # component is missing and hands back the path itself, so without this the
+    # function returns the literal string "driver" when nothing is bound, and
+    # every caller concludes the device is in use.
+    [ -L "/sys/bus/pci/devices/$1/driver" ] || return 1
     l=$(readlink -f "/sys/bus/pci/devices/$1/driver" 2>/dev/null) || return 1
     [ -n "$l" ] && basename "$l"
 }
