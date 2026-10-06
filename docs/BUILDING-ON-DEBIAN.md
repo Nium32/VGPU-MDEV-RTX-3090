@@ -88,11 +88,35 @@ echo 1 > /sys/bus/pci/devices/<bdf>/reset
 # then bring the stack back up in the usual order
 ```
 
+## 3. qcow2 backing paths are absolute
+
+The guest images record their backing files as absolute paths:
+
+```
+backing file: /var/lib/vgpu-vm/win-key0/win-key0.qcow2
+```
+
+Move the images to a different host, or mount the data filesystem somewhere else, and the chain
+stops resolving. `qemu-img info --backing-chain` reports a single level instead of four, and QEMU
+refuses to boot the overlay.
+
+Do **not** fix this with `qemu-img rebase` - that rewrites metadata in the images, and on a chain
+whose parents are deliberately protected that is the wrong tool. Recreate the path instead:
+
+```bash
+ln -sfn /srv/vgpu/VMs/vgpu-vm /var/lib/vgpu-vm
+```
+
+One symlink, nothing written to any image, and every absolute backing reference resolves again.
+
 ## Smaller Debian differences
 
 - **nouveau** binds the card at boot and is in use, so it cannot be `rmmod`ed. Blacklist it and
   reboot. Write the blacklist *before* anything triggers `update-initramfs`, so it lands in the
   initramfs on the first regeneration.
+- **A redirect is applied by your shell, not by `sudo`.** `sudo cmd >> /var/log/vgpu/x.log` fails
+  with `Permission denied` because `deb` opens the file, not root. Use
+  `sudo sh -c "cmd >> /var/log/vgpu/x.log"`. The failure looks like a sudo problem and is not.
 - **`modinfo` is in `/usr/sbin`**, which is not on a normal user's PATH. Scripts that call it
   unqualified will fail with `command not found` rather than anything informative.
 - **OVMF** is at `/usr/share/OVMF/OVMF_CODE_4M.fd` from the `ovmf` package. `detect_ovmf` in
