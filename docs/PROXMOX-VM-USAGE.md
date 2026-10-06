@@ -359,6 +359,63 @@ the timer was active.
 > prompt and try passwords. Use a strong password on the guest account, and do not forward these
 > ports from a router to the internet.
 
+#### If RDP sits on "Welcome" forever
+
+The client authenticates, shows *Welcome*, and is eventually dropped. This is not an
+authentication or network problem, and the guest says so itself. In
+`Microsoft-Windows-RemoteDesktopServices-RdpCoreTS/Operational`:
+
+```
+id=145  During this connection, server has not sent data or graphics update for 0 seconds
+id=102  The server has terminated main RDP connection with the client
+id=40   Session N has been disconnected, reason code 0
+```
+
+The session is created and then produces no frames, because the WDDM path used for remote sessions
+does not come up on a GPU-accelerated guest. Forcing the legacy XDDM path fixes it:
+
+```
+HKLM\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services
+    fEnableWddmDriver = 0   (REG_DWORD)
+```
+
+On a stock guest that value is absent, which means WDDM. [`scripts/pve-fix-rdp-wddm.sh`](../scripts/pve-fix-rdp-wddm.sh)
+sets it offline on a stopped guest, the same way the Code 43 fix works, and reads the value back
+afterwards so a merge that silently did nothing is caught rather than reported as success.
+
+```bash
+qm stop <vmid>
+scripts/pve-fix-rdp-wddm.sh /srv/vgpu/pve/images/<vmid>/vm-<vmid>-disk-0.qcow2
+qm start <vmid>
+```
+
+**The trade-offs, both measured, not predicted:**
+
+The remote desktop surface is composited through the legacy path rather than the vGPU.
+Applications still use the GPU — CUDA and Direct3D are unaffected, and `nvidia-smi` in the guest
+still shows the card — but the remote desktop itself is no longer GPU-composited. If you want a
+GPU-composited remote session, RDP is the wrong transport; use a tool that does its own GPU
+capture and encode.
+
+**The Proxmox console goes blank.** After this change both guests here kept running normally —
+reachable by ping, RDP port open, `Xid 0` — while `qm monitor` `screendump` returned a solid
+blank image where it had previously returned a full desktop. So the earlier statement in this
+document that the console "always works" is only true *before* this change. Do not apply it to a
+guest whose console is your only way in. Recovery does not depend on the console in any case: the
+disk can always be edited offline with the scripts here, which is how the value got set in the
+first place.
+
+Reverting is one command, and then the console renders again:
+
+```bash
+qm stop <vmid>
+scripts/pve-fix-rdp-wddm.sh -r /srv/vgpu/pve/images/<vmid>/vm-<vmid>-disk-0.qcow2
+qm start <vmid>
+```
+
+Diagnose before applying it. `qwinsta` in the guest shows whether a session is being created at
+all, which separates this from a genuine authentication or firewall problem.
+
 #### Or keep them private, over an SSH tunnel
 
 If you would rather expose nothing, tunnel instead. `AllowTcpForwarding` is on by default and
