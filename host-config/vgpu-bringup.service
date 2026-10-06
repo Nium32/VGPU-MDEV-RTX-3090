@@ -4,16 +4,21 @@
 # Without this the modules are not loaded after a reboot, no mdev types are
 # registered, and any attempt to start a guest fails with no obvious reason.
 #
-# Ordering matters. The stack needs the data filesystem holding the module
-# trees and the kprobe helpers, so this waits for local filesystems. It also
-# starts nvidia-vgpud and nvidia-vgpu-mgr itself, in the right order, which is
-# why those units are listed as Before rather than After - bringup.sh drives
-# them, so systemd must not race it.
+# The stack needs the data filesystem holding the module trees and the kprobe
+# helpers, so this waits for local filesystems.
+#
+# Do NOT add Before=nvidia-vgpud.service. bringup.sh starts that unit itself
+# with systemctl restart and waits for it, so an ordering constraint saying
+# nvidia-vgpud must start after this unit finishes deadlocks: the script blocks
+# waiting for a unit systemd will not start until the script exits. That was
+# tried, and it hangs at step 2 until the start timeout.
+#
+# bringup.sh owns nvidia-vgpud and nvidia-vgpu-mgr completely. Leave systemd
+# out of their ordering.
 Description=Bring up the NVIDIA vGPU host stack
 Documentation=https://github.com/Nium32/VGPU-MDEV-RTX-3090
 After=local-fs.target network.target
 Wants=local-fs.target
-Before=nvidia-vgpud.service nvidia-vgpu-mgr.service
 
 [Service]
 Type=oneshot
