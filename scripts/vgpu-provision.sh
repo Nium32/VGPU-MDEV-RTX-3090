@@ -23,7 +23,9 @@ VMID=${1:?usage: $0 <vmid> [staging-dir]}
 STAGING=${2:-/srv/vgpu/staging}
 GEXEC=${GEXEC:-/srv/vgpu/gexec.sh}
 IMAGES=${IMAGES:-/srv/vgpu/pve/images}
-DLS=${DLS:-192.168.1.4}
+# Licence server address. Defaults to this host's own primary address, since the DLS
+# normally runs here; override DLS=... if it lives elsewhere.
+DLS=${DLS:-$(ip -o -4 route get 1.1.1.1 2>/dev/null | awk '{print $7; exit}')}
 NBD=${NBD:-/dev/nbd8}
 
 [ "$(id -u)" -eq 0 ] || { echo "run as root" >&2; exit 1; }
