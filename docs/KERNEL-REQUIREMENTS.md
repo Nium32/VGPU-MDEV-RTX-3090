@@ -11,6 +11,7 @@ Identical driver, identical host configuration, identical hardware. Only the ker
 |---|---|---|---|---|
 | 5.15.95-051595-generic | real | 0 | 0 | works |
 | **6.1.71-1-lts** | **real** | **0** | **0** | **works — this is the one** |
+| **6.1.0-53-amd64** (Debian 12) | **real** | **0** | **0** | **works** — stack comes up identically, 18 RTXA5000 profiles, `avail=3`, Xid 0 |
 | 6.8.9-arch1-2 | poison | 50 | 100 | fails |
 | 6.18.52-1-cachyos-lts | poison | ~76 | ~152 | fails |
 
@@ -97,6 +98,9 @@ a slice. Use `max_instance` as the profile fact.
 
 **Do not hard-code `nvidia-664`.** The numeric id is assigned per driver version and per board.
 Resolve the profile by its name, `RTXA5000-8Q`, which is what `lib/common.sh` does.
+
+For Debian and Ubuntu hosts there are two extra traps - split kernel headers and the
+`vgpu_unlock` board mapping. See [BUILDING-ON-DEBIAN.md](BUILDING-ON-DEBIAN.md).
 
 ## Host module parameters
 

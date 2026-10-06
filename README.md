@@ -66,6 +66,7 @@ including what was ruled out as the cause, is in [docs/KERNEL-REQUIREMENTS.md](d
 
 ```
 docs/TUTORIAL.md        the full walkthrough - read this first
+docs/BUILDING-ON-DEBIAN.md  Debian and Ubuntu: split headers, and the board mapping
 vgpu.conf.example      every tunable, with defaults and auto-detection
 lib/common.sh          config loading, hardware discovery, sanity checks
 scripts/preflight.sh   report what this machine looks like; changes nothing
