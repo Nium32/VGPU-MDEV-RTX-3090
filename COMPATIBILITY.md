@@ -14,11 +14,11 @@ Driver 535.309.01 throughout. Same host, same configuration, only the kernel cha
 |---|---|---|---|---|
 | 5.15.95-051595-generic | yes | 0 | 0 | measured on a separate install; unusable on a btrfs root with `BLOCK_GROUP_TREE` |
 | 6.1.71-1-lts | **yes** | 0 | 0 | the reference configuration |
-| 6.2.x | **untried** | | | |
+| 6.2.x | **untried** | | | now low value - 6.5 works, so the regression is above it |
 | 6.3.x | **untried** | | | |
 | 6.4.x | **untried** | | | |
-| 6.5.x | **untried** | | | |
-| 6.6.x LTS | **untried** | | | the obvious one to test — an LTS in the unknown gap |
+| **6.5.13-6-pve** | **yes** | 0 | 0 | CUDA-ALL-PASS. Proxmox ships this one, so Proxmox can run its own kernel |
+| 6.6.x LTS | **untried** | | | **now THE datapoint to get** - the window is (6.5, 6.8] and 6.6 sits in it |
 | 6.7.x | **untried** | | | |
 | 6.8.9-arch1-2 | no | 50 | 100 | `Immediate pteblit ... timed out` |
 | 6.12.x LTS | **untried** | | | |

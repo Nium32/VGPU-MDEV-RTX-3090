@@ -1,7 +1,13 @@
 # Proxmox VE on a working kernel
 
-Proxmox is viable, but not from its own installer. Every current Proxmox ISO ships a kernel that
-fails for vGPU on this hardware:
+Proxmox is viable, and as of the 6.5 measurement it can run **its own kernel** rather than needing
+Debian 12 underneath.
+
+`proxmox-kernel-6.5` (6.5.13-6-pve) was tested on this hardware and returned **CUDA-ALL-PASS**
+with `pteblit=0 errors=0 xid=0`. It is a supported Proxmox kernel with Proxmox ZFS modules built
+for it, which removes the "no ZFS" cost of the Debian route entirely.
+
+What still does not work is the **default** kernel of any current ISO:
 
 | Proxmox | default kernel | usable here |
 |---|---|---|
@@ -10,7 +16,16 @@ fails for vGPU on this hardware:
 | 9.1 | 6.17 | no |
 | 9.2 | 7.0 | no |
 
-The route that works is **Debian 12 first, Proxmox on top, Debian's 6.1 kernel kept**.
+Two routes work:
+
+1. **Install Proxmox normally, then `apt install proxmox-kernel-6.5` and pin to it.** Simplest,
+   keeps you on a Proxmox-supported kernel, and ZFS works. Preferred now that 6.5 is measured.
+2. **Debian 12 first, Proxmox on top, Debian's 6.1 kernel kept.** This is the route that was
+   actually walked here, and it is documented below. Use it if you want the longest-proven kernel
+   - 6.1 is the one with the most hours on it across three distributions - and can live without
+   ZFS.
+
+Either way the pinning section applies, because the ISO default is 6.8 and it is listed first.
 
 ## What was actually done
 
@@ -23,7 +38,7 @@ Then:
 
 ```bash
 # hostname must resolve to the real address, not 127.0.1.1
-echo "192.168.1.4   myhost.localdomain   myhost" >> /etc/hosts
+echo "<host-ip>   myhost.localdomain   myhost" >> /etc/hosts
 
 curl -fsSL -o /etc/apt/trusted.gpg.d/proxmox-release-bookworm.gpg \
      https://enterprise.proxmox.com/debian/proxmox-release-bookworm.gpg
@@ -154,18 +169,30 @@ price of a PCI reset plus a driver reload.
 
 It gives you the web UI, the storage and backup layer, and the VM lifecycle tooling.
 
-It does **not** manage the vGPU guest for you. The mdev is created by hand against
-`mdev_supported_types` and the guest is launched with a raw QEMU command line, because the vGPU
-needs `vfio-pci,sysfsdev=` pointed at a specific mdev UUID and the profile has to be resolved by
-name. Proxmox's own `hostpci` mdev support assumes a licensed vGPU deployment and a profile table
-it recognises.
+It **can** manage the vGPU guest for you. An earlier version of this document said otherwise, on
+the assumption that Proxmox's `hostpci` mdev support needed a licensed vGPU deployment and a
+profile table it recognised. That was wrong, and testing it disproved it: Proxmox reads
+`mdev_supported_types` directly, lists the unlocked profiles, and creates and destroys the mdev
+itself from a config line like
+
+```
+hostpci0: <gpu-bdf>,mdev=nvidia-664,pcie=1
+```
+
+Two Windows guests were run concurrently this way, each with a working `RTXA5000-8Q`. The import
+procedure, the Code 43 that shows up immediately after importing, and how to add further VMs are
+in [PROXMOX-VM-USAGE.md](PROXMOX-VM-USAGE.md).
+
+Running the guest by hand with `scripts/startguest.sh` remains perfectly valid, and is still the
+path with the most hours on it. Proxmox is the option, not the replacement.
 
 Two further caveats on this host:
 
-- **No bridge was created.** `vmbr0` is the normal Proxmox setup, but converting a live interface
-  to a bridge over SSH risks locking yourself out. The guest here uses QEMU user-mode networking
-  with a forwarded RDP port, which needs no bridge. Add one from the console if you want
-  Proxmox-managed VMs with bridged networking.
+- **A bridge is needed for Proxmox-managed VMs.** Converting a live interface to a bridge over SSH
+  risks locking yourself out, so the setup here uses an *isolated* bridge with NAT instead, which
+  never touches the administration interface. `scripts/startguest.sh` needs no bridge at all — it
+  uses QEMU user-mode networking with a forwarded RDP port. See
+  [PROXMOX-VM-USAGE.md](PROXMOX-VM-USAGE.md).
 - **The address is DHCP.** Proxmox prefers static. It has been stable, but a lease change would
   move the web UI.
 

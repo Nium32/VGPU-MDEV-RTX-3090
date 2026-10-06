@@ -68,12 +68,15 @@ including what was ruled out as the cause, is in [docs/KERNEL-REQUIREMENTS.md](d
 docs/TUTORIAL.md        the full walkthrough - read this first
 docs/BUILDING-ON-DEBIAN.md  Debian and Ubuntu: split headers, and the board mapping
 docs/PROXMOX.md         Proxmox on a kernel that works, and pinning it there
+docs/PROXMOX-VM-USAGE.md  running the guest as a Proxmox VM, and adding more of them
 vgpu.conf.example      every tunable, with defaults and auto-detection
 lib/common.sh          config loading, hardware discovery, sanity checks
 scripts/preflight.sh   report what this machine looks like; changes nothing
 scripts/bringup.sh     load the stack in the order that works
 scripts/startguest.sh  create an mdev and boot a guest on it
 scripts/hardreset.sh   full teardown, including the vfio core
+scripts/pve-fix-nvidia-regkeys.sh  write the guest tuning keys into a stopped guest's
+                       registry offline, for when Windows allocates a new class subkey
 scripts/as-run/        the original machine-specific versions, kept for provenance
 kmod/zfmulti/          required: suppresses the leaked runlist disable
 kmod/mdguest/          loaded by the working setup; measurably inert on this build
@@ -180,7 +183,7 @@ at one of them right now, the linked section is where the answer is.
 | what you are seeing | what it means |
 |---|---|
 | `Immediate pteblit ... timed out`, hundreds of them, from `nvidia-vgpu-mgr` | your kernel. 6.8 and 6.18 fail this way, 6.1.71 does not. [KERNEL-REQUIREMENTS.md](docs/KERNEL-REQUIREMENTS.md) |
-| guest shows **Code 43** in Device Manager with a vGPU attached | the two guest registry keys are missing, or are in the wrong class subkey. [Tutorial Part 9](docs/TUTORIAL.md) |
+| guest shows **Code 43** in Device Manager with a vGPU attached | the two guest registry keys are missing, or are in the wrong class subkey. [Tutorial Part 9](docs/TUTORIAL.md). If the guest only started doing this after you moved it to Proxmox or changed its PCI slot, the keys are on the *old* subkey: [PROXMOX-VM-USAGE.md](docs/PROXMOX-VM-USAGE.md) |
 | `Xid 44 ... Ch 00000008, intr 00000000` every run | `RMSetClientRMAllocatedCtxBuffer` is unset, so the guest promotes its own context buffers. [Tutorial Part 9](docs/TUTORIAL.md) |
 | guest boots, GPU present, no errors anywhere, and nothing renders | an interrupt handler disabled the graphics runlist and nothing re-enabled it. This is the core finding. [Tutorial Part 5](docs/TUTORIAL.md) |
 | `init_device_instance` fails with **error 7** | no PCI function-level reset after a by-hand driver reload |

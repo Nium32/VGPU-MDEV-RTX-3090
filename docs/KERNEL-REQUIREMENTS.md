@@ -12,6 +12,7 @@ Identical driver, identical host configuration, identical hardware. Only the ker
 | 5.15.95-051595-generic | real | 0 | 0 | works |
 | **6.1.71-1-lts** | **real** | **0** | **0** | **works — this is the one** |
 | **6.1.0-53-amd64** (Debian 12) | **real** | **0** | **0** | **works — CUDA-ALL-PASS**, compute verified by readback. See below. |
+| **6.5.13-6-pve** (Proxmox) | **real** | **0** | **0** | **works — CUDA-ALL-PASS**, compute verified by readback |
 | 6.8.9-arch1-2 | poison | 50 | 100 | fails |
 | 6.18.52-1-cachyos-lts | poison | ~76 | ~152 | fails |
 
@@ -54,10 +55,21 @@ the kprobe spec is portable across kernel builds of the same driver — only raw
 
 Debian needs two extra things; see [BUILDING-ON-DEBIAN.md](BUILDING-ON-DEBIAN.md).
 
-### The gap nobody has measured
+### Where the regression actually starts
 
-Working: 6.1.71. Broken: 6.8.9. **Nothing in between was tested.** The boundary could be
-anywhere in 6.2 through 6.7. If you test one, that is genuinely new information.
+Working: 6.1.71, 6.1.0-53, and **6.5.13-6-pve**. Broken: 6.8.9 and 6.18.52.
+
+So the regression appears somewhere in **(6.5, 6.8]** - everything from 6.2 through 6.5 is now
+cleared. 6.5 was measured the same way as every other row: stack up, guest attached, compute
+verified by reading data back, `pteblit=0 errors=0 xid=0` across 676 plugin log lines.
+
+Nothing between 6.5 and 6.8 has been tested, and no Proxmox kernel exists in that window (the
+repository carries 6.2, 6.5, 6.8, 6.11 and 6.14). Testing a mainline 6.6 or 6.7 would close it
+completely.
+
+The practical consequence is larger than the forensic one: **Proxmox 8 can run its own
+`proxmox-kernel-6.5`** rather than needing Debian 12 underneath for the 6.1 kernel. That is a
+supported Proxmox kernel with Proxmox ZFS modules built for it.
 
 An earlier guess blamed the vfio pin-page API rework at 6.0. That guess was wrong — 6.1 works —
 and reading the 550 driver's handling of that API did not show a defect. The mechanism behind the
